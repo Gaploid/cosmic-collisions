@@ -23,7 +23,13 @@ stays in the rock and lights it, deep red past 900 K, white past 40 000.
   velocity, particle count, bounce, core fraction and density restart the run;
   exposure, glow, shading and stars do not.
 
-Drag rotates · wheel zooms · Space pauses · R restarts · F follows the largest body.
+Drag rotates · wheel or pinch zooms · Space pauses · R restarts · F follows the
+largest body.
+
+On a phone it opens at 33k particles and draws at fewer pixels than the display
+asks for, and gives back pixels — never physics — if the frames start to cost
+too much; the particle slider still goes to 262k for anyone who wants to find
+out what their phone can do.
 
 Not SPH — no shocks, no vaporization — but the deformation, the tidal arm, the
 disk and the re-accretion are all there.
@@ -55,10 +61,29 @@ Star positions from the Bright Star Catalogue, 5th Revised Ed. (Hoffleit &
 Warren), via the Harvard/SAO catalogue archive. Public domain / free to use with
 credit.
 
+## Analytics
+
+The live page loads Google Analytics 4 (`G-M1GPXGSXSN`) near the top of the
+`<head>`: page views and the anonymous session numbers that come with them,
+nothing about what the simulation is doing. With the font stylesheet it is one
+of only two things the page fetches from anywhere else — everything the
+simulation needs, the star catalogue included, is in the file — so a copy served
+somewhere else runs unchanged with those five lines deleted.
+
 ## Changelog
 
 Broad strokes, newest first; the commit history tells each one in full.
 
+- **2026-08-26 — A phone can hold this.** The run was built for a desk. A phone
+  takes the same collision at a quarter of the particles — 33k still splashes,
+  still throws a disk, still gathers a moon — at 1.25× rather than the 3× its
+  display asks for, and the picture falls to 85 % and then 72 % of a side if the
+  frames stop coming, climbing back when they do. The canvas and the readouts
+  sit in the viewport the phone actually shows, inside the notch and the home
+  bar; held upright the report folds its lines and keeps its books to itself,
+  laid on its side the panel takes the room left below it and scrolls the rest.
+  Pause and restart are a square with a shape in it now, follow is off the panel
+  and lives on the `f` key, and the page picked up Google Analytics.
 - **2026-08-26 — A shorter panel.** The advanced panel lost its two spin
   sliders — a spin is a property of the rock, like its density, and both bodies
   keep the eight-hour day they start with — and says the rest in fewer words:
