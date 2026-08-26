@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="A giant impact, simulated: two self-gravitating planets of real mass collide in WebGL — the splash, the debris disk, and the moon that gathers out of it.">
-<meta property="og:title" content="Stardust — Impact">
+<meta property="og:title" content="Cosmic Collisions">
 <meta property="og:description" content="Two planets with real mass and gravity collide in your browser.">
 <meta property="og:type" content="website">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>&#x1F4A5;</text></svg>">
-<title>Stardust — Impact</title>
+<title>Cosmic Collisions</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
@@ -172,6 +172,7 @@
   @media (max-width: 640px) {
     #hud-help { display: none; }
     #hud-title { top: 14px; left: 16px; }
+    #hud-title strong { font-size: 12px; letter-spacing: 0.22em; }   /* the name is long; it has to clear the corner link */
     #hud-corner { top: 14px; right: 16px; }
     #hud-back { padding: 8px 10px; }
     #hud-controls { top: 78px; left: 16px; right: 16px; gap: 10px; }
@@ -188,8 +189,8 @@
 </head>
 <body>
 <canvas id="stage"></canvas>
-<div class="hud" id="hud-title"><strong>Impact</strong><span id="hud-sub">initializing…</span></div>
-<div class="hud" id="hud-corner"><a id="hud-back" href="index.html">← stardust</a></div>
+<div class="hud" id="hud-title"><strong>Cosmic Collisions</strong><span id="hud-sub">initializing…</span></div>
+<div class="hud" id="hud-corner"><a id="hud-back" href="https://gaploid.github.io/stardust/">stardust ↗</a></div>
 <div class="hud" id="hud-controls">
 <div id="hud-preset">
   <button data-preset="theia" class="on"><span class="ic">🌙</span>theia</button>
