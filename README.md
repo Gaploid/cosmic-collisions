@@ -63,12 +63,7 @@ credit.
 
 ## Analytics
 
-The live page loads Google Analytics 4 (`G-M1GPXGSXSN`) near the top of the
-`<head>`: page views and the anonymous session numbers that come with them,
-nothing about what the simulation is doing. With the font stylesheet it is one
-of only two things the page fetches from anywhere else — everything the
-simulation needs, the star catalogue included, is in the file — so a copy served
-somewhere else runs unchanged with those five lines deleted.
+This site uses Google Analytics to understand basic usage.
 
 ## Changelog
 
