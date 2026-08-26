@@ -61,10 +61,6 @@ Star positions from the Bright Star Catalogue, 5th Revised Ed. (Hoffleit &
 Warren), via the Harvard/SAO catalogue archive. Public domain / free to use with
 credit.
 
-## Analytics
-
-This site uses Google Analytics to understand basic usage.
-
 ## Changelog
 
 Broad strokes, newest first; the commit history tells each one in full.
@@ -139,6 +135,10 @@ Broad strokes, newest first; the commit history tells each one in full.
 
 The page began as a second page of [stardust](https://github.com/Gaploid/stardust)
 and moved into this repository on 2026-08-26, with its history.
+
+## Analytics
+
+This site uses Google Analytics to understand basic usage.
 
 ## License
 
