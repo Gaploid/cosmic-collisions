@@ -104,6 +104,9 @@
     top: 22px;
     right: 26px;
     z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     pointer-events: auto;
   }
   #hud-back {
@@ -132,7 +135,7 @@
   #hud-run .sep { color: #3d4a58; }
   /* pause and restart are pressed, not read: they are a shape, and a small
      square of one holds a fingertip where a word underlined does not */
-  .hud button.iconbtn {
+  .hud .iconbtn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -145,8 +148,10 @@
     background: rgba(8, 12, 18, 0.7);
     color: #c2d4e6;
   }
-  .hud button.iconbtn:hover { border-color: #66788c; color: #ffffff; background: rgba(16, 24, 34, 0.85); }
-  .hud button.iconbtn svg { display: block; width: 13px; height: 13px; fill: currentColor; }
+  .hud .iconbtn:hover { border-color: #66788c; color: #ffffff; background: rgba(16, 24, 34, 0.85); }
+  .hud .iconbtn svg { display: block; width: 13px; height: 13px; fill: currentColor; }
+  #hud-src { text-decoration: none; }
+  #hud-src svg { width: 15px; height: 15px; }
   #btn-pause .i-play, #btn-pause.paused .i-pause { display: none; }
   #btn-pause.paused .i-play { display: inline; }
   #adv-panel {
@@ -232,8 +237,10 @@
      button anyone can hit */
   @media (pointer: coarse) {
     .hud button { padding: 6px 0 7px; }
-    .hud button.iconbtn { width: 36px; height: 36px; }
-    .hud button.iconbtn svg { width: 15px; height: 15px; }
+    #adv-panel { background: rgba(6, 9, 14, 0.93); }   /* upright it lies over the planet, and 0.78 was not enough to read through */
+    .hud .iconbtn { width: 36px; height: 36px; }
+    .hud .iconbtn svg { width: 15px; height: 15px; }
+    #hud-src svg { width: 17px; height: 17px; }
     #adv-panel input[type="range"] { height: 26px; }
     #adv-panel input[type="checkbox"] { width: 18px; height: 18px; }
   }
@@ -250,9 +257,20 @@
     #adv-panel { width: auto; max-width: calc(100vw - 64px); }   /* on a phone it spans the column, sliders and all */
     #adv-panel label { grid-template-columns: 88px 1fr 48px; }   /* narrower and "impactor M⊕" folds in two */
     #adv-panel input[type="range"] { width: 100%; }
-    #hud-stat { bottom: 12px; right: 16px; }
+    #hud-back { display: none; }   /* one corner, one link: the source */
+    /* the clock and the run's numbers share a line, pushed to the two edges */
+    #hud-stat {
+      left: 16px;
+      right: 16px;
+      bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+    }
+    #hud-stat strong { font-size: 13px; letter-spacing: 0.18em; }
     #hud-report {
-      bottom: 62px;
+      bottom: 42px;
       left: 16px;
       right: 16px;
       font-size: 9px;
@@ -279,7 +297,7 @@
     #hud-preset, #hud-run { gap: 2px 14px; }
     .hud button { padding: 4px 0 5px; }   /* every row given back is a row of panel */
     #hud-run { gap: 4px 12px; }
-    .hud button.iconbtn { width: 32px; height: 32px; }
+    .hud .iconbtn { width: 32px; height: 32px; }
     #adv-panel {
       width: auto;
       max-width: 100%;
@@ -289,9 +307,19 @@
     }
     #adv-panel label { grid-template-columns: 88px 1fr 42px; }
     #adv-panel input[type="range"] { width: 100%; }
-    #hud-stat { bottom: 10px; right: 14px; }
+    #hud-back { display: none; }
+    #hud-stat {
+      left: 14px;
+      right: 14px;
+      bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+    }
+    #hud-stat strong { font-size: 13px; letter-spacing: 0.18em; }
     #hud-report {
-      bottom: 58px;
+      bottom: 38px;
       right: 14px;
       left: auto;
       max-width: 44vw;
@@ -308,7 +336,7 @@
 <canvas id="stage"></canvas>
 <div id="hud-layer">
 <div class="hud" id="hud-title"><strong>Cosmic Collisions</strong><span id="hud-sub">initializing…</span></div>
-<div class="hud" id="hud-corner"><a id="hud-back" href="https://gaploid.github.io/stardust/">stardust ↗</a></div>
+<div class="hud" id="hud-corner"><a id="hud-back" href="https://gaploid.github.io/stardust/">stardust ↗</a><a id="hud-src" class="iconbtn" href="https://github.com/Gaploid/cosmic-collisions" target="_blank" rel="noopener" aria-label="source on GitHub" title="source on GitHub"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></a></div>
 <div class="hud" id="hud-controls">
 <div id="hud-preset">
   <button data-preset="theia" class="on"><span class="ic">🌙</span>theia</button>
@@ -2047,7 +2075,7 @@ function build() {
   setStaticUniforms();
   report = null; stepAcc = 0; paused = false;
   $('btn-pause').classList.remove('paused');
-  $('hud-report').hidden = true;
+  $('hud-report').hidden = true; lastReport = '';
   camTarget = [0, 0, 0];
 }
 
@@ -2906,6 +2934,18 @@ function fmtTime(t) {
   return 'T+ ' + hh + 'h ' + (mm < 10 ? '0' : '') + mm + 'm';
 }
 function fmtCount(n) { return n >= 1e6 ? (n / 1e6).toFixed(n % 1e6 ? 1 : 0) + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'k' : String(n); }
+// The report is rebuilt sixty times a second and changes perhaps twice a
+// second: parsing the HTML only when it differs saves the phone that work, and
+// hands the panel the one moment it needs — the box below it changed height.
+var lastReport = '';
+function showReport(rep, lines) {
+  var html = lines.join('\n');
+  if (html === lastReport && !rep.hidden) return;
+  lastReport = html;
+  rep.innerHTML = html;
+  rep.hidden = false;
+  fitPanel();
+}
 var fpsFrames = 0, fpsT0 = performance.now(), fps = 0;
 function hud() {
   var sub = PRESETS[S.preset] ? PRESETS[S.preset].label : 'custom';
@@ -2921,7 +2961,20 @@ function hud() {
   var rep = $('hud-report');
   if (report && sim) {
     var pct = function (x) { return Math.round(x * 100) + '%'; };
-    var lines = ['<b>largest</b>  ' + fmtMass(report.largest) + ' <i>' + pct(report.largestImp) + ' impactor · ' + pct(report.largestIron) + ' iron' + (report.day < 200 ? ' · day ' + report.day.toFixed(1) + ' h' : '') + '</i>'];
+    var lines;
+    if (compact) {
+      // A phone gets the outcome, not the audit: what the planet ended up as,
+      // what the disk it is wearing would make, what left for good. The
+      // provenance of the disk-to-moon number, the impactor's share of each
+      // piece and the books belong to the wide screen that has room to argue.
+      lines = ['<b>largest</b> ' + fmtMass(report.largest) + ' <i>' + pct(report.largestIron) + ' iron' + (report.day < 200 ? ' · day ' + report.day.toFixed(1) + ' h' : '') + '</i>'];
+      lines.push('<b>orbit</b> ' + fmtMass(report.orbit) + (report.orbit > 0.0005 ? ' <i>→</i> <b>moon</b> ' + (report.moon / 0.0123).toFixed(2) + ' M☾' : ''));
+      lines.push('<b>escaping</b> ' + fmtMass(report.escape));
+      if (report.second) lines.push('<b>2nd</b> ' + fmtMass(report.second.mass) + ' <i>· ' + report.second.dist.toFixed(1) + ' R⊕ · ' + (report.second.bound ? 'bound' : 'unbound') + '</i>');
+      showReport(rep, lines);
+      return;
+    }
+    lines = ['<b>largest</b>  ' + fmtMass(report.largest) + ' <i>' + pct(report.largestImp) + ' impactor · ' + pct(report.largestIron) + ' iron' + (report.day < 200 ? ' · day ' + report.day.toFixed(1) + ' h' : '') + '</i>'];
     lines.push('<b>in orbit</b> ' + fmtMass(report.orbit));
     if (report.orbit > 0.0005) lines.push('<b>moon</b> ≈ ' + (report.moon / 0.0123).toFixed(2) + ' M☾ <i>· from that disk, j ' + report.jD.toFixed(2) + ' · Ida–Canup–Stewart</i>');
     lines.push('<b>escaping</b> ' + fmtMass(report.escape));
@@ -2934,9 +2987,7 @@ function hud() {
     lines.push('<b>momentum</b> drift ' + (report.drift * V_UNIT * 1000).toFixed(1) + ' m/s <i>· L ' + (report.L / L_EM).toFixed(2) + ' L<sub>EM</sub>' + (ref ? ' ' + sgn((report.L - ref.L) / ref.L * 100, 2) + ' %' : '') + '</i>');
     lines.push('<b>energy</b> ' + sgn(E, 3) + ' <i>· heat ' + report.Q.toFixed(3) + ' ≈ ' + Math.round(report.Q / report.M * E_KG / CP_ROCK / 100) * 100 + ' K' + (ref ? ' · balance ' + sgn((E + report.Q - ref.EQ) / Math.abs(ref.E) * 100, 2) + ' %' : '') + '</i>');
     lines.push('<b>cells</b> ' + (report.unseated * 100).toFixed(2) + ' % unseated <i>· ' + (report.full * 100).toFixed(1) + ' % in full cells · pairs ' + fmtCount(report.pp.list.length) + (report.pp.loose > report.pp.list.length ? ' of ' + fmtCount(report.pp.loose) : '') + '</i>');
-    if (compact) lines.length -= 3;   // the books — momentum, energy, cells — are for a desk; a phone gets the story
-    rep.innerHTML = lines.join('\n');
-    rep.hidden = false;
+    showReport(rep, lines);
   }
 }
 
@@ -3019,7 +3070,17 @@ function fitPanel() {
   p.style.maxHeight = '';
   if (p.hidden) return;
   var top = p.getBoundingClientRect().top;
-  var room = (window.visualViewport ? visualViewport.height : window.innerHeight) - top - 12;
+  var floor = window.visualViewport ? visualViewport.height : window.innerHeight;
+  if (compact) {
+    // the clock runs the width of the foot, so the panel stops above it; and
+    // upright the report is a band across the foot too, where on its side it
+    // sits in the other column and is none of the panel's business
+    var st = $('hud-stat').getBoundingClientRect();
+    if (st.height) floor = Math.min(floor, st.top);
+    var r = $('hud-report');
+    if (!r.hidden && window.innerWidth <= 640) floor = Math.min(floor, r.getBoundingClientRect().top);
+  }
+  var room = floor - top - 10;
   if (room < p.scrollHeight) p.style.maxHeight = Math.max(120, room) + 'px';
 }
 $('adv-toggle').addEventListener('click', function () {

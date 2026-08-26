@@ -65,14 +65,22 @@ credit.
 
 Broad strokes, newest first; the commit history tells each one in full.
 
+- **2026-08-27 — The phone's own readout.** A phone has no room for an audit:
+  the report gives the outcome — what the planet came out as, what the disk it is
+  wearing would make, what left for good — and the provenance of that figure, the
+  impactor's share of every piece and the books stay on the wide screen that has
+  room to argue. The clock and the run's numbers share one line across the foot;
+  the advanced panel stops above whatever the foot already holds instead of
+  sliding under it; and the corner carries a link to the source, where the
+  sister page keeps its link on the desktop.
 - **2026-08-26 — A phone can hold this.** The run was built for a desk. A phone
   takes the same collision at a quarter of the particles — 33k still splashes,
   still throws a disk, still gathers a moon — at 1.25× rather than the 3× its
   display asks for, and the picture falls to 85 % and then 72 % of a side if the
   frames stop coming, climbing back when they do. The canvas and the readouts
   sit in the viewport the phone actually shows, inside the notch and the home
-  bar; held upright the report folds its lines and keeps its books to itself,
-  laid on its side the panel takes the room left below it and scrolls the rest.
+  bar; held upright the report keeps its books to itself, laid on its side the
+  panel takes the room left below it and scrolls the rest.
   Pause and restart are a square with a shape in it now, follow is off the panel
   and lives on the `f` key, and the page picked up Google Analytics.
 - **2026-08-26 — A shorter panel.** The advanced panel lost its two spin
