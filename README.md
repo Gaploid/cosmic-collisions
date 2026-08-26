@@ -16,9 +16,11 @@ stays in the rock and lights it, deep red past 900 K, white past 40 000.
 
 - **Presets** — *theia*, the canonical Moon-forming impact; *head-on*;
   *hit & run*; *twins*; *shatter*.
-- **Readout** — it follows the largest body and its disk, says what stays, what
-  orbits and what escapes, what Moon that disk would make, and keeps the books
-  on momentum, angular momentum and energy.
+- **Readout** — a fixed table, the same rows in the same columns from the first
+  look to the last: what stays, what orbits and what escapes, what Moon that
+  disk would make — by the Ida–Canup–Stewart scaling from the disk's mass and
+  its specific angular momentum — and the books on momentum, angular momentum
+  and energy. A phone gets the outcome without the books.
 - **Advanced panel** — impactor mass, impact angle, speed in units of escape
   velocity, particle count, bounce, core fraction and density restart the run;
   exposure, glow, shading and stars do not.
@@ -65,6 +67,15 @@ credit.
 
 Broad strokes, newest first; the commit history tells each one in full.
 
+- **2026-08-27 — A readout that holds still.** The report was a stack of
+  sentences: rows appeared and vanished with the run, every number sat wherever
+  the words before it ended, and the box changed width with the longest line, so
+  following one figure meant finding it again each time. It is a table now —
+  every row always present, an absent second body saying so rather than closing
+  the gap, name, number and note each in a column of their own, the numbers
+  right-aligned on their decimal points, and the whole box a fixed width.
+  Between one look and the next nothing moves but the digits. The scaling's
+  citation moved to this file, where it can be read once instead of every frame.
 - **2026-08-27 — The phone's own readout.** A phone has no room for an audit:
   the report gives the outcome — what the planet came out as, what the disk it is
   wearing would make, what left for good — and the provenance of that figure, the

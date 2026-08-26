@@ -198,6 +198,12 @@
   }
   #adv-panel span { text-align: right; color: #9db0c4; font-variant-numeric: tabular-nums; }
   #adv-panel .note { margin: 1px 0 2px; padding-top: 6px; border-top: 1px solid #1a2430; font-size: 9px; letter-spacing: 0.08em; color: #3d4a58; text-transform: none; }
+  /* A readout that moves is a readout nobody can follow. Every row is always
+     there — an absent second body says so rather than closing the gap — the
+     name, the number and the note each keep a column of their own, and the box
+     keeps its width, so between one look and the next only the digits change.
+     The widths are in ch: the face is monospace, so a column is a count of
+     characters, and letter-spacing is off because it would put the count out. */
   #hud-report {
     bottom: 64px;
     right: 26px;
@@ -206,16 +212,21 @@
     border: 1px solid #22303e;
     border-radius: 4px;
     font-size: 10px;
-    letter-spacing: 0.08em;
+    letter-spacing: 0;
     text-transform: none;
-    line-height: 1.6;
+    line-height: 1.65;
     color: #9db0c4;
-    white-space: pre;
     font-variant-numeric: tabular-nums;
+    display: grid;
+    grid-template-columns: 9ch 10ch 1fr;
+    column-gap: 11px;
+    width: 72ch;   /* the longest note the run can produce, measured, and two characters of slack */
+    box-sizing: border-box;
   }
   #hud-report[hidden] { display: none; }
-  #hud-report b { font-weight: 500; color: #c2d4e6; }
-  #hud-report i { font-style: normal; color: #566574; }
+  #hud-report b { font-weight: 500; color: #c2d4e6; white-space: nowrap; }
+  #hud-report .v { text-align: right; color: #c2d4e6; white-space: nowrap; }
+  #hud-report i { font-style: normal; color: #566574; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }   /* if a note ever outgrows the column, say so rather than cut it off mid-word */
   #hud-help { bottom: 20px; left: 26px; }
   #hud-stat { bottom: 20px; right: 26px; text-align: right; font-variant-numeric: tabular-nums; }
   #hud-stat strong { font-size: 15px; letter-spacing: 0.2em; }
@@ -273,9 +284,11 @@
       bottom: 42px;
       left: 16px;
       right: 16px;
+      width: auto;
+      grid-template-columns: 8ch 9ch 1fr;
+      column-gap: 8px;
       font-size: 9px;
-      line-height: 1.55;
-      white-space: pre-wrap;   /* the lines are wider than a phone: fold them rather than run them off the edge */
+      line-height: 1.6;
     }
   }
   /* ---------- a phone laid on its side, and any short window ---------- */
@@ -322,12 +335,13 @@
       bottom: 38px;
       right: 14px;
       left: auto;
-      max-width: 44vw;
+      width: 44vw;
+      grid-template-columns: 8ch 9ch 1fr;
+      column-gap: 8px;
       max-height: calc(100dvh - 130px);
       overflow: hidden;
       font-size: 9px;
-      line-height: 1.5;
-      white-space: pre-wrap;
+      line-height: 1.6;
     }
   }
 </style>
@@ -2938,8 +2952,10 @@ function fmtCount(n) { return n >= 1e6 ? (n / 1e6).toFixed(n % 1e6 ? 1 : 0) + 'M
 // second: parsing the HTML only when it differs saves the phone that work, and
 // hands the panel the one moment it needs — the box below it changed height.
 var lastReport = '';
-function showReport(rep, lines) {
-  var html = lines.join('\n');
+function showReport(rep, rows) {
+  var html = '';
+  for (var i = 0; i < rows.length; i++)
+    html += '<b>' + rows[i][0] + '</b><span class="v">' + rows[i][1] + '</span><i>' + (rows[i][2] || '') + '</i>';
   if (html === lastReport && !rep.hidden) return;
   lastReport = html;
   rep.innerHTML = html;
@@ -2961,33 +2977,35 @@ function hud() {
   var rep = $('hud-report');
   if (report && sim) {
     var pct = function (x) { return Math.round(x * 100) + '%'; };
-    var lines;
+    var dash = '\u2014', sec = report.second;
     if (compact) {
-      // A phone gets the outcome, not the audit: what the planet ended up as,
+      // A phone gets the outcome, not the audit: what the planet came out as,
       // what the disk it is wearing would make, what left for good. The
-      // provenance of the disk-to-moon number, the impactor's share of each
-      // piece and the books belong to the wide screen that has room to argue.
-      lines = ['<b>largest</b> ' + fmtMass(report.largest) + ' <i>' + pct(report.largestIron) + ' iron' + (report.day < 200 ? ' · day ' + report.day.toFixed(1) + ' h' : '') + '</i>'];
-      lines.push('<b>orbit</b> ' + fmtMass(report.orbit) + (report.orbit > 0.0005 ? ' <i>→</i> <b>moon</b> ' + (report.moon / 0.0123).toFixed(2) + ' M☾' : ''));
-      lines.push('<b>escaping</b> ' + fmtMass(report.escape));
-      if (report.second) lines.push('<b>2nd</b> ' + fmtMass(report.second.mass) + ' <i>· ' + report.second.dist.toFixed(1) + ' R⊕ · ' + (report.second.bound ? 'bound' : 'unbound') + '</i>');
-      showReport(rep, lines);
+      // impactor's share of every piece and the books belong to the wide
+      // screen that has the room to argue.
+      showReport(rep, [
+        ['largest', fmtMass(report.largest), pct(report.largestIron) + ' iron' + (report.day < 200 ? ' \u00b7 day ' + report.day.toFixed(1) + ' h' : '')],
+        ['orbit', fmtMass(report.orbit), '\u2192 moon ' + (report.moon / 0.0123).toFixed(2) + ' M\u263e'],
+        ['escaping', fmtMass(report.escape), ''],
+        ['2nd body', sec ? fmtMass(sec.mass) : dash, sec ? sec.dist.toFixed(1) + ' R\u2295 \u00b7 ' + (sec.bound ? 'bound' : 'unbound') : '']
+      ]);
       return;
     }
-    lines = ['<b>largest</b>  ' + fmtMass(report.largest) + ' <i>' + pct(report.largestImp) + ' impactor · ' + pct(report.largestIron) + ' iron' + (report.day < 200 ? ' · day ' + report.day.toFixed(1) + ' h' : '') + '</i>'];
-    lines.push('<b>in orbit</b> ' + fmtMass(report.orbit));
-    if (report.orbit > 0.0005) lines.push('<b>moon</b> ≈ ' + (report.moon / 0.0123).toFixed(2) + ' M☾ <i>· from that disk, j ' + report.jD.toFixed(2) + ' · Ida–Canup–Stewart</i>');
-    lines.push('<b>escaping</b> ' + fmtMass(report.escape));
-    if (report.second) lines.push('<b>2nd body</b> ' + fmtMass(report.second.mass) + ' <i>· ' + report.second.dist.toFixed(1) + ' R⊕ · ' + (report.second.bound ? 'bound' : 'unbound') + ' · ' + pct(report.second.imp) + ' impactor · ' + pct(report.second.iron) + ' iron</i>');
-    // the books, against the first look: the barycentre's drift, the angular
-    // momentum in today's Earth–Moon units and its change, the mechanical
+    // the books, against the first look: the angular momentum in today's
+    // Earth–Moon units and its change, the barycentre's drift, the mechanical
     // energy, the heat, and whether the two add up to what they were
     var ref = sim.ref, E = report.KE + report.PE + report.EL;
     var sgn = function (x, d) { var s = Math.abs(x).toFixed(d); return (parseFloat(s) === 0 ? '' : x < 0 ? '\u2212' : '+') + s; };
-    lines.push('<b>momentum</b> drift ' + (report.drift * V_UNIT * 1000).toFixed(1) + ' m/s <i>· L ' + (report.L / L_EM).toFixed(2) + ' L<sub>EM</sub>' + (ref ? ' ' + sgn((report.L - ref.L) / ref.L * 100, 2) + ' %' : '') + '</i>');
-    lines.push('<b>energy</b> ' + sgn(E, 3) + ' <i>· heat ' + report.Q.toFixed(3) + ' ≈ ' + Math.round(report.Q / report.M * E_KG / CP_ROCK / 100) * 100 + ' K' + (ref ? ' · balance ' + sgn((E + report.Q - ref.EQ) / Math.abs(ref.E) * 100, 2) + ' %' : '') + '</i>');
-    lines.push('<b>cells</b> ' + (report.unseated * 100).toFixed(2) + ' % unseated <i>· ' + (report.full * 100).toFixed(1) + ' % in full cells · pairs ' + fmtCount(report.pp.list.length) + (report.pp.loose > report.pp.list.length ? ' of ' + fmtCount(report.pp.loose) : '') + '</i>');
-    showReport(rep, lines);
+    showReport(rep, [
+      ['largest', fmtMass(report.largest), pct(report.largestIron) + ' iron \u00b7 ' + pct(report.largestImp) + ' impactor' + (report.day < 200 ? ' \u00b7 day ' + report.day.toFixed(1) + ' h' : '')],
+      ['in orbit', fmtMass(report.orbit), report.orbit > 0.0005 ? 'j ' + report.jD.toFixed(2) : ''],
+      ['moon', (report.moon / 0.0123).toFixed(2) + ' M\u263e', ''],
+      ['escaping', fmtMass(report.escape), ''],
+      ['2nd body', sec ? fmtMass(sec.mass) : dash, sec ? sec.dist.toFixed(1) + ' R\u2295 \u00b7 ' + (sec.bound ? 'bound' : 'unbound') + ' \u00b7 ' + pct(sec.imp) + ' impactor' : ''],
+      ['L', (report.L / L_EM).toFixed(2) + ' LEM', (ref ? sgn((report.L - ref.L) / ref.L * 100, 2) + ' % \u00b7 ' : '') + 'drift ' + (report.drift * V_UNIT * 1000).toFixed(1) + ' m/s'],
+      ['energy', sgn(E, 3), 'heat ' + report.Q.toFixed(3) + ' \u2248 ' + Math.round(report.Q / report.M * E_KG / CP_ROCK / 100) * 100 + ' K' + (ref ? ' \u00b7 balance ' + sgn((E + report.Q - ref.EQ) / Math.abs(ref.E) * 100, 2) + ' %' : '')],
+      ['cells', (report.unseated * 100).toFixed(2) + ' %', 'unseated \u00b7 ' + (report.full * 100).toFixed(1) + ' % full \u00b7 pairs ' + fmtCount(report.pp.list.length) + (report.pp.loose > report.pp.list.length ? ' of ' + fmtCount(report.pp.loose) : '')]
+    ]);
   }
 }
 
