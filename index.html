@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#04060a">
 <meta name="description" content="A giant impact, simulated: two self-gravitating planets of real mass collide in WebGL — the splash, the debris disk, and the moon that gathers out of it.">
 <meta property="og:title" content="Cosmic Collisions">
 <meta property="og:description" content="Two planets with real mass and gravity collide in your browser.">
@@ -19,20 +20,37 @@
     height: 100%;
     background: #04060a;
     overflow: hidden;
+    overscroll-behavior: none;
   }
+  /* the picture and the readouts both live in the *visible* viewport: on a
+     phone 100vh runs on under the browser's own bars, and the clock at the
+     bottom goes under with it */
   #stage {
     position: fixed;
-    inset: 0;
+    left: 0;
+    top: 0;
     width: 100%;
     height: 100%;
+    height: 100dvh;
     display: block;
     touch-action: none;
     cursor: grab;
   }
   #stage.dragging { cursor: grabbing; }
-  .hud {
+  /* the HUD hangs off this, so every corner it names is a corner the phone
+     actually shows — inside the notch, the island and the home bar */
+  #hud-layer {
     position: fixed;
+    left: env(safe-area-inset-left, 0px);
+    right: env(safe-area-inset-right, 0px);
+    top: env(safe-area-inset-top, 0px);
+    height: calc(100% - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
     z-index: 2;
+    pointer-events: none;
+  }
+  .hud {
+    position: absolute;
     pointer-events: none;
     font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 11px;
@@ -53,6 +71,7 @@
     background: none;
     border: none;
     margin: 0;
+    touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
     padding: 0 0 3px;
     font: inherit;
@@ -81,6 +100,7 @@
   #hud-back {
     display: flex;
     align-items: center;
+    touch-action: manipulation;
     gap: 9px;
     padding: 8px 14px;
     color: #c2d4e6;
@@ -99,12 +119,39 @@
     pointer-events: auto;
   }
   #hud-preset, #hud-run { display: flex; gap: 6px 16px; flex-wrap: wrap; align-items: baseline; }
+  #hud-run { gap: 6px 12px; align-items: center; }
   #hud-run .sep { color: #3d4a58; }
+  /* pause and restart are pressed, not read: they are a shape, and a small
+     square of one holds a fingertip where a word underlined does not */
+  .hud button.iconbtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid #2a3644;
+    border-bottom-color: #2a3644;
+    border-radius: 4px;
+    background: rgba(8, 12, 18, 0.7);
+    color: #c2d4e6;
+  }
+  .hud button.iconbtn:hover { border-color: #66788c; color: #ffffff; background: rgba(16, 24, 34, 0.85); }
+  .hud button.iconbtn svg { display: block; width: 13px; height: 13px; fill: currentColor; }
+  #btn-pause .i-play, #btn-pause.paused .i-pause { display: none; }
+  #btn-pause.paused .i-play { display: inline; }
   #adv-panel {
     margin-top: 10px;
     display: flex;
     flex-direction: column;
     width: fit-content;
+    box-sizing: border-box;          /* fitPanel() hands it a height; the padding has to live inside it */
+    overflow-y: auto;                 /* eleven rows do not fit a phone on its side: fitPanel() caps it and the rest scrolls */
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: #2a3644 transparent;
     gap: 6px;
     padding: 12px 14px;
     background: rgba(8, 12, 18, 0.78);
@@ -112,6 +159,9 @@
     border-radius: 4px;
   }
   #adv-panel[hidden] { display: none; }
+  #adv-panel::-webkit-scrollbar { width: 5px; }
+  #adv-panel::-webkit-scrollbar-thumb { background: #2a3644; border-radius: 3px; }
+  #adv-panel::-webkit-scrollbar-track { background: transparent; }
   #adv-panel label {
     display: grid;
     grid-template-columns: 88px 110px 40px;
@@ -169,6 +219,16 @@
     text-align: center;
     padding: 24px;
   }
+  /* a fingertip is not a cursor: the three-pixel band under a word is not a
+     button anyone can hit */
+  @media (pointer: coarse) {
+    .hud button { padding: 6px 0 7px; }
+    .hud button.iconbtn { width: 36px; height: 36px; }
+    .hud button.iconbtn svg { width: 15px; height: 15px; }
+    #adv-panel input[type="range"] { height: 26px; }
+    #adv-panel input[type="checkbox"] { width: 18px; height: 18px; }
+  }
+  /* ---------- a phone held upright ---------- */
   @media (max-width: 640px) {
     #hud-help { display: none; }
     #hud-title { top: 14px; left: 16px; }
@@ -177,18 +237,67 @@
     #hud-back { padding: 8px 10px; }
     #hud-controls { top: 78px; left: 16px; right: 16px; gap: 10px; }
     .hud { font-size: 12px; }
-    .hud button { padding: 5px 0 6px; }
     #hud-preset, #hud-run { gap: 4px 14px; }
     #adv-panel { width: auto; max-width: calc(100vw - 64px); }   /* on a phone it spans the column, sliders and all */
-    #adv-panel label { grid-template-columns: 84px 1fr 56px; }
-    #adv-panel input[type="range"] { width: 100%; height: 26px; }
+    #adv-panel label { grid-template-columns: 88px 1fr 48px; }   /* narrower and "impactor M⊕" folds in two */
+    #adv-panel input[type="range"] { width: 100%; }
     #hud-stat { bottom: 12px; right: 16px; }
-    #hud-report { bottom: 58px; right: 16px; }
+    #hud-report {
+      bottom: 62px;
+      left: 16px;
+      right: 16px;
+      font-size: 9px;
+      line-height: 1.55;
+      white-space: pre-wrap;   /* the lines are wider than a phone: fold them rather than run them off the edge */
+    }
+  }
+  /* ---------- a phone laid on its side, and any short window ---------- */
+  /* 390 points of height with the browser's bars inside it: the panel and the
+     report give room up rather than run off the bottom */
+  @media (max-height: 560px) {
+    #hud-help { display: none; }
+    #hud-title { top: 10px; left: 14px; }
+    #hud-title strong { font-size: 12px; letter-spacing: 0.22em; }
+    #hud-corner { top: 10px; right: 14px; }
+    #hud-back { padding: 6px 10px; }
+    #hud-controls {
+      top: 54px;
+      left: 14px;
+      right: auto;
+      max-width: min(52vw, 330px);
+      gap: 8px;
+    }
+    #hud-preset, #hud-run { gap: 2px 14px; }
+    .hud button { padding: 4px 0 5px; }   /* every row given back is a row of panel */
+    #hud-run { gap: 4px 12px; }
+    .hud button.iconbtn { width: 32px; height: 32px; }
+    #adv-panel {
+      width: auto;
+      max-width: 100%;
+      gap: 4px;
+      margin-top: 6px;
+      padding: 9px 11px;
+    }
+    #adv-panel label { grid-template-columns: 88px 1fr 42px; }
+    #adv-panel input[type="range"] { width: 100%; }
+    #hud-stat { bottom: 10px; right: 14px; }
+    #hud-report {
+      bottom: 58px;
+      right: 14px;
+      left: auto;
+      max-width: 44vw;
+      max-height: calc(100dvh - 130px);
+      overflow: hidden;
+      font-size: 9px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
   }
 </style>
 </head>
 <body>
 <canvas id="stage"></canvas>
+<div id="hud-layer">
 <div class="hud" id="hud-title"><strong>Cosmic Collisions</strong><span id="hud-sub">initializing…</span></div>
 <div class="hud" id="hud-corner"><a id="hud-back" href="https://gaploid.github.io/stardust/">stardust ↗</a></div>
 <div class="hud" id="hud-controls">
@@ -200,16 +309,14 @@
   <button data-preset="shatter"><span class="ic">🔥</span>shatter</button>
 </div>
 <div id="hud-run">
-  <button id="btn-pause">pause</button>
-  <button id="btn-restart">restart</button>
+  <button id="btn-pause" class="iconbtn" aria-label="pause" title="pause — space"><svg viewBox="0 0 14 14" aria-hidden="true"><rect class="i-pause" x="3" y="2" width="2.8" height="10" rx="0.4"/><rect class="i-pause" x="8.2" y="2" width="2.8" height="10" rx="0.4"/><path class="i-play" d="M3.6 2 L11.4 7 L3.6 12 Z"/></svg></button>
+  <button id="btn-restart" class="iconbtn" aria-label="restart" title="restart — r"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M11.2 4.2A5 5 0 1 1 7 2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M7 0.2 L7 3.8 L10.2 2 Z"/></svg></button>
   <span class="sep">·</span>
   <button data-speed="1">¼×</button>
   <button data-speed="2">½×</button>
   <button data-speed="4" class="on">1×</button>
   <button data-speed="8">2×</button>
   <button data-speed="16">4×</button>
-  <span class="sep">·</span>
-  <button id="btn-follow">follow</button>
 </div>
 <div id="hud-adv">
   <button id="adv-toggle"><span class="ic">⚙️</span>advanced</button>
@@ -230,8 +337,9 @@
 </div>
 </div>
 <div class="hud" id="hud-report" hidden></div>
-<div class="hud" id="hud-help">drag — rotate &nbsp;·&nbsp; wheel — zoom &nbsp;·&nbsp; space — pause &nbsp;·&nbsp; r — restart</div>
+<div class="hud" id="hud-help">drag — rotate &nbsp;·&nbsp; wheel — zoom &nbsp;·&nbsp; space — pause &nbsp;·&nbsp; r — restart &nbsp;·&nbsp; f — follow</div>
 <div class="hud" id="hud-stat"><strong id="hud-clock">T+ 0h 00m</strong><span id="hud-fps"></span></div>
+</div>
 <div id="fallback">WebGL 2 is not available in this browser —<br>the simulation cannot run.</div>
 <script>
 (function () {
@@ -246,6 +354,17 @@ if (!gl.getExtension('EXT_color_buffer_float')) { fail('This GPU cannot render t
 // half floats the small ones are lost once the sum passes a thousand (2 % of
 // the mass, measured), so it blends in full floats where the GPU allows
 var floatBlend = !!gl.getExtension('EXT_float_blend');
+// A phone drops the GL context when it is backgrounded or when memory runs
+// short. Taking the event is what lets the browser hand one back; the state
+// behind it — every texture, every program, the run itself — went with it,
+// so the page starts over rather than draw into nothing.
+var contextLost = false;
+canvas.addEventListener('webglcontextlost', function (e) {
+  e.preventDefault();
+  contextLost = true;
+  fail('The graphics context was lost —<br>restoring…');
+});
+canvas.addEventListener('webglcontextrestored', function () { location.reload(); });
 
 // ---------- units ----------
 // G = 1, Earth mass = 1, Earth radius = 1. Then the time unit is √(R³/GM) = 805 s
@@ -275,12 +394,34 @@ var PRESETS = {
   twins:   { q: 1.00, angle: 45, vfac: 1.10, dist: 9,   label: 'twins' },
   shatter: { q: 0.50, angle: 20, vfac: 2.60, dist: 18,  label: 'shatter' }
 };
+// ---------- what the device is ----------
+// A phone has a tenth of a desktop's GPU behind a screen a fifth the size, so
+// it gets the same collision at a quarter of the particles — 33k still
+// splashes, still throws a disk, still gathers a moon — drawn at fewer pixels
+// than its 3× display asks for. Anyone who wants to push their phone has the
+// slider. A coarse pointer with a short side under 550 points is a phone; a
+// coarse pointer with more is a tablet, and takes the step above.
+var COARSE = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+var SHORT_SIDE = Math.min(screen.width || 9999, screen.height || 9999);
+var PHONE = COARSE && SHORT_SIDE <= 550, TABLET = COARSE && !PHONE;
+var DPR_CAP = PHONE ? 1.25 : 1.5;      // a million half-float pixels an iPhone does not need
+var BLUR_PASSES = PHONE ? 2 : 4;       // the bilateral blur, x then y — twice over where there is room for it
+var ANALYZE_EVERY = PHONE ? 90 : 45;   // frames between looks: the read-back and the sort cost a phone more
+var DEFAULT_N = PHONE ? 1 : TABLET ? 2 : 3;
+// the same short screen the CSS lays out for: the report drops its books there
+var narrowMQ = typeof matchMedia === 'function' ? matchMedia('(max-width: 640px), (max-height: 560px)') : null;
+var compact = !!(narrowMQ && narrowMQ.matches);
+if (narrowMQ) {
+  var onNarrow = function (e) { compact = e.matches; };
+  if (narrowMQ.addEventListener) narrowMQ.addEventListener('change', onNarrow); else narrowMQ.addListener(onNarrow);
+}
+
 // both bodies arrive turning about the orbital axis, prograde, with days of
 // about eight hours — a young planet's. It is a property of the rock, like its
 // density, and it had a slider once; nobody needs to turn Earth's day down to
 // nothing from the panel, so spin0 and spin1 live here (negative is retrograde,
 // ±0.55 is the Ćuk & Stewart 2.6-hour Earth, and maclaurin() cuts the spheroid)
-var S = { q: 0.1, angle: 45, vfac: 1.05, spin0: 0.18, spin1: 0.20, nIdx: 3, rest: 0.3, core: 0.325, dens: 0.75,
+var S = { q: 0.1, angle: 45, vfac: 1.05, spin0: 0.18, spin1: 0.20, nIdx: DEFAULT_N, rest: 0.3, core: 0.325, dens: 0.75,
           exposure: 1.0, glow: 1.0, shade: true, stars: true, follow: false, speed: 4, preset: 'theia' };
 var COL_TARGET = [0.40, 0.58, 0.90], COL_IMPACTOR = [0.96, 0.55, 0.28];
 // the look of the heat: the glow's brightness scale and white point in K,
@@ -1496,8 +1637,24 @@ function bloomTarget(w, h, bytes) {
 }
 var gbuf = null, blurA = null, blurB = null, bloomA = null, bloomB = null, bloomW = 0, bloomH = 0, ldr = null;
 var hdr = { fbo: gl.createFramebuffer(), tex: null, depth: gl.createRenderbuffer(), w: 0, h: 0 };
+// The picture is drawn at this much of a side on top of the pixel-ratio cap.
+// A phone that starts at sixty does not stay there — it warms, and ten minutes
+// in the frame takes twice as long — so rather than stutter it draws fewer
+// pixels, and takes them back when the frames come easily again. Only the
+// picture moves; the physics never sees it.
+var RENDER_SCALES = [1, 0.85, 0.72], scaleIdx = 0, scaleT0 = 0, easyRuns = 0;
+var renderScale = 1;
+function governQuality(now) {
+  if (!sim || sim.phase === 'settle' || paused || !fps) { scaleT0 = now; return; }
+  if (now - scaleT0 < 2500) return;
+  scaleT0 = now;
+  if (fps < 40 && scaleIdx < RENDER_SCALES.length - 1) { scaleIdx++; easyRuns = 0; }
+  else if (fps > 56 && scaleIdx > 0) { if (++easyRuns < 3) return; easyRuns = 0; scaleIdx--; }   // seven seconds of comfort before it climbs
+  else { easyRuns = 0; return; }
+  renderScale = RENDER_SCALES[scaleIdx];
+}
 function resize() {
-  var dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+  var dpr = Math.min(window.devicePixelRatio || 1, DPR_CAP) * renderScale;
   var w = Math.max(1, Math.round(canvas.clientWidth * dpr)), h = Math.max(1, Math.round(canvas.clientHeight * dpr));
   if (w === hdr.w && h === hdr.h) return;
   canvas.width = w; canvas.height = h;
@@ -1880,7 +2037,7 @@ function build() {
   pp.count = 0; pp.loose = 0;
   setStaticUniforms();
   report = null; stepAcc = 0; paused = false;
-  $('btn-pause').textContent = 'pause';
+  $('btn-pause').classList.remove('paused');
   $('hud-report').hidden = true;
   camTarget = [0, 0, 0];
 }
@@ -2517,6 +2674,10 @@ canvas.addEventListener('pointermove', function (e) {
   }
 });
 function endPointer(e) { pointers.delete(e.pointerId); if (pointers.size === 0) canvas.classList.remove('dragging'); }
+// Safari answers a two-finger pinch by zooming the page; the sim wants it
+['gesturestart', 'gesturechange', 'gestureend'].forEach(function (t) {
+  document.addEventListener(t, function (e) { e.preventDefault(); }, { passive: false });
+});
 canvas.addEventListener('pointerup', endPointer);
 canvas.addEventListener('pointercancel', endPointer);
 canvas.addEventListener('wheel', function (e) {
@@ -2582,7 +2743,7 @@ function render() {
     gl.uniform1f(b.uRange, 4.0 * sim.a);
     gl.uniform2i(b.uRes, w, h);
     var from = gbuf, ping = [blurA, blurB];
-    for (var pass = 0; pass < 4; pass++) {
+    for (var pass = 0; pass < BLUR_PASSES; pass++) {
       var to = ping[pass & 1];
       gl.bindFramebuffer(gl.FRAMEBUFFER, to.fbo);
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, from.mat);
@@ -2747,7 +2908,7 @@ function hud() {
   else sub += ' · aftermath';
   $('hud-sub').textContent = sub;
   $('hud-clock').textContent = sim ? fmtTime(sim.t) : 'T+ 0h 00m';
-  $('hud-fps').textContent = sim ? fmtCount(sim.N) + ' bodies · ' + Math.round(sim.vc * V_UNIT) + ' km/s · ' + fps + ' fps' : '';
+  $('hud-fps').textContent = sim ? fmtCount(sim.N) + (compact ? '' : ' bodies') + ' · ' + Math.round(sim.vc * V_UNIT) + ' km/s · ' + fps + ' fps' : '';
   var rep = $('hud-report');
   if (report && sim) {
     var pct = function (x) { return Math.round(x * 100) + '%'; };
@@ -2764,6 +2925,7 @@ function hud() {
     lines.push('<b>momentum</b> drift ' + (report.drift * V_UNIT * 1000).toFixed(1) + ' m/s <i>· L ' + (report.L / L_EM).toFixed(2) + ' L<sub>EM</sub>' + (ref ? ' ' + sgn((report.L - ref.L) / ref.L * 100, 2) + ' %' : '') + '</i>');
     lines.push('<b>energy</b> ' + sgn(E, 3) + ' <i>· heat ' + report.Q.toFixed(3) + ' ≈ ' + Math.round(report.Q / report.M * E_KG / CP_ROCK / 100) * 100 + ' K' + (ref ? ' · balance ' + sgn((E + report.Q - ref.EQ) / Math.abs(ref.E) * 100, 2) + ' %' : '') + '</i>');
     lines.push('<b>cells</b> ' + (report.unseated * 100).toFixed(2) + ' % unseated <i>· ' + (report.full * 100).toFixed(1) + ' % in full cells · pairs ' + fmtCount(report.pp.list.length) + (report.pp.loose > report.pp.list.length ? ' of ' + fmtCount(report.pp.loose) : '') + '</i>');
+    if (compact) lines.length -= 3;   // the books — momentum, energy, cells — are for a desk; a phone gets the story
     rep.innerHTML = lines.join('\n');
     rep.hidden = false;
   }
@@ -2772,6 +2934,7 @@ function hud() {
 // ---------- the loop ----------
 var frameNo = 0;
 function frame() {
+  if (contextLost) return;
   requestAnimationFrame(frame);
   resize();
   if (sim) {
@@ -2787,11 +2950,12 @@ function frame() {
   }
   render();
   if (pending) collect();
-  if (sim && sim.phase !== 'settle' && (frameNo % 45 === 0 || sim.stepNo - analyzedAt >= 360)) analyze();
+  if (sim && sim.phase !== 'settle' && (frameNo % ANALYZE_EVERY === 0 || sim.stepNo - analyzedAt >= 360)) analyze();
   frameNo++;
   fpsFrames++;
   var now = performance.now();
   if (now - fpsT0 > 500) { fps = Math.round(fpsFrames * 1000 / (now - fpsT0)); fpsFrames = 0; fpsT0 = now; }
+  governQuality(now);
   hud();
 }
 
@@ -2827,13 +2991,34 @@ $('hud-run').addEventListener('click', function (e) {
   if (!b) return;
   if (b.id === 'btn-pause') togglePause();
   else if (b.id === 'btn-restart') build();
-  else if (b.id === 'btn-follow') { S.follow = !S.follow; b.classList.toggle('on', S.follow); }
   else if (b.hasAttribute('data-speed')) { S.speed = parseFloat(b.getAttribute('data-speed')); setOn($('hud-run'), 'data-speed', S.speed); }
 });
-function togglePause() { paused = !paused; $('btn-pause').textContent = paused ? 'resume' : 'pause'; }
+function togglePause() {
+  paused = !paused;
+  var b = $('btn-pause');
+  b.classList.toggle('paused', paused);
+  b.setAttribute('aria-label', paused ? 'resume' : 'pause');
+  b.setAttribute('title', (paused ? 'resume' : 'pause') + ' — space');
+}
+// The panel is the tallest thing on the page, and a phone on its side has 390
+// points of height to give it. It gets whatever is left below wherever it
+// starts — which is where the preset and run rows happen to have wrapped to —
+// and scrolls inside that. Off a phone there is always room and the cap comes
+// straight back off.
+function fitPanel() {
+  var p = $('adv-panel');
+  p.style.maxHeight = '';
+  if (p.hidden) return;
+  var top = p.getBoundingClientRect().top;
+  var room = (window.visualViewport ? visualViewport.height : window.innerHeight) - top - 12;
+  if (room < p.scrollHeight) p.style.maxHeight = Math.max(120, room) + 'px';
+}
 $('adv-toggle').addEventListener('click', function () {
   var p = $('adv-panel'); p.hidden = !p.hidden; $('adv-toggle').classList.toggle('on', !p.hidden);
+  fitPanel();
 });
+window.addEventListener('resize', fitPanel);
+window.addEventListener('orientationchange', function () { setTimeout(fitPanel, 250); });
 function custom() { S.preset = 'custom'; setOn($('hud-preset'), 'data-preset', ''); }
 function onRange(id, live, apply, keepPreset) {
   var el = $(id);
@@ -2855,7 +3040,7 @@ window.addEventListener('keydown', function (e) {
   if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON')) return;
   if (e.code === 'Space') { e.preventDefault(); if (sim && sim.phase !== 'settle') togglePause(); }
   else if (e.code === 'KeyR') build();
-  else if (e.code === 'KeyF') { S.follow = !S.follow; $('btn-follow').classList.toggle('on', S.follow); }
+  else if (e.code === 'KeyF') S.follow = !S.follow;   // the camera rides the planet; the key is the whole of it
 });
 
 // for scripted screenshots: run straight to a sim time (in time units) and hold
@@ -2938,7 +3123,7 @@ window.__impact = {
     while (sim.phase === 'approach' && sim.t < t) rigidStep(0.01);
     while (sim.phase === 'full' && sim.t < t) { step(false, false); sim.t += sim.dt; if (sim.stepNo - analyzedAt >= 360) analyze(true); }
     analyze(true);
-    paused = true; $('btn-pause').textContent = 'resume';
+    paused = true; $('btn-pause').classList.add('paused');
     return sim.t;
   }
 };
