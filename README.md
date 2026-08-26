@@ -4,7 +4,7 @@ A giant impact, simulated: two planets of real mass fall together under their
 own gravity and collide — the splash, the tidal arm, the debris disk, and the
 moon that gathers out of it.
 
-**Live: https://gaploid.github.io/cosmic_collisions/**
+**Live: https://gaploid.github.io/cosmic-collisions/**
 
 ## What it does
 
