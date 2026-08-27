@@ -352,6 +352,7 @@ CC.view = {
   get lights() { return lastLights; },
 
   setTarget: function (t) { camTarget = t; },
+  get sun() { return SUN; },   // a page that wants its subject lit has to know where the light is
   setRadPow: function (e) { radPow = e; },
   setMaxPoint: function (px) { maxPoint = px > 0 ? Math.min(px, MAX_POINT) : MAX_POINT; },
   setPalette: function (p) { for (var i = 0; i < p.length && i < 8; i++) pal.set(p[i], i * 3); },

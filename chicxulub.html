@@ -276,19 +276,20 @@ var COUPLE_FS = [
 // drawn far larger than it is, because a spherule the size of a sand grain has
 // no business being visible from a planet away.
 var E_L = 6.371e6, E_T = 805.5, E_V = 6.371e6 / 805.5;   // metres, seconds, m/s: G = M⊕ = R⊕ = 1
-var G_SEA = 0, G_LAND = 1, G_FLY = 2, G_FELL = 3, G_ROCK = 4;
+var G_SEA = 0, G_LAND = 1, G_FLY = 2, G_FELL = 3, G_ROCK = 4, G_CRATER = 5;
 // the night ocean, the graticule over it, the plume in flight, where it has
 // come down, and the rock on its way in
-var GLOBE_PAL = [[0.07, 0.11, 0.20], [0.20, 0.27, 0.34], [0.62, 0.50, 0.40],
-                 [0.46, 0.31, 0.22], [0.24, 0.21, 0.19], [0, 0, 0], [0, 0, 0], [0, 0, 0]];
+var GLOBE_PAL = [[0.11, 0.19, 0.33], [0.30, 0.40, 0.48], [0.68, 0.54, 0.42],
+                 [0.52, 0.34, 0.23], [0.55, 0.50, 0.46], [0.05, 0.04, 0.04], [0, 0, 0], [0, 0, 0]];
 // Chicxulub threw about 25 trillion tonnes clear of its crater. The mass
 // launched faster than v falls off as v^−3μ with Housen & Holsapple's μ, and a
 // bigger or smaller impact scales with the volume of the hole it makes.
 var EJECTA_REF = 2.5e16, EJECTA_REF_D = 91100, EJ_SLOPE = 3 * HH_MU;
 var V_MIN = 1000 / E_V, V_MAX = 13000 / E_V;             // the slowest mote worth drawing, and past escape
 var ATM_TOP = 3.0e5 / E_L, ATM_H = 8.0e3 / E_L;          // 300 km of air, over an 8 km scale height
-var CHICX_LAT = 21.4;                                    // where it hit, then as now
+var CHICX_LAT = 21.4;                                    // where it hit, then as now — the longitude is chosen for the light
 var SHELL_W = 40.0;                                      // the shell draws 1.8× the heaviest mote
+var ROCK_W = 12.0;                                       // and the rock a little over half a shell particle: nothing here is to scale, least of all a 14 km stone
 
 // The step, and the whole of it. Gravity is one central mass; there are no
 // contacts, because a plume this thin never touches itself. A mote crossing
@@ -366,6 +367,8 @@ var LAUNCH_FS = [
   'uniform float uRock;',
   'uniform float uHot;',
   'uniform float uLay;',
+  'uniform float uCrat;',        // the material a scarred shell particle becomes
+  'uniform float uCosCrat;',     // and how far round from ground zero the scar reaches
   'layout(location = 0) out vec4 oPos;',
   'layout(location = 1) out vec4 oVel;',
   'layout(location = 2) out vec4 oAux;',
@@ -377,7 +380,16 @@ var LAUNCH_FS = [
   '  oAux = vec4(0.0, 0.0, 0.0, 1.0);',
   '  oQ = texelFetch(uQ, me, 0);',
   '  float w = P.w;',
-  '  if (w < uHeld + 0.5) { oPos = P; oVel = V; return; }',
+  // the shell keeps still, but the ground under the impact is not what it was:
+  // the crater is burned into it at the size it really is, which at this scale
+  // is a couple of particles — that being the honest answer to how much of a
+  // planet a 180 km hole is
+  '  if (w < uHeld + 0.5) {',
+  '    bool scar = dot(normalize(P.xyz), uAt) > uCosCrat;',
+  '    oPos = vec4(P.xyz, scar ? uCrat : w);',
+  '    oVel = V;',
+  '    return;',
+  '  }',
   '  if (dot(V.xyz, V.xyz) < 1e-12) { oPos = vec4(uAt * (1.0 + uLay), uFell); oVel = vec4(0.0, 0.0, 0.0, uHot); return; }',   // the rock, which is down already
   '  oPos = vec4(uAt * 1.0005, uFly);',
   '  oVel = vec4(V.xyz, uHot);',
@@ -909,10 +921,30 @@ function buildGlobe() {
     vel[o + 3] = 255;
   }
 
-  // where it hit, and the frame there: up, north and east
-  var la = CHICX_LAT * Math.PI / 180;
-  var up = [Math.cos(la), Math.sin(la), 0];
-  var north = [-Math.sin(la), Math.cos(la), 0], east = [0, 0, 1];
+  // Where it hit, and the frame there: up, north and east. The latitude is
+  // Chicxulub's; the longitude is free, since there are no continents to be
+  // wrong about, so it is picked to stand about forty degrees off the
+  // sub-solar point — far enough into the light to be seen, near enough the
+  // terminator that the globe still reads as a ball.
+  var la = CHICX_LAT * Math.PI / 180, sun = VIEW.sun;
+  var lon = 0, best = -9;
+  for (var g = 0; g < 360; g += 2) {
+    var t = g * Math.PI / 180;
+    var d = Math.cos(la) * Math.cos(t) * sun[0] + Math.sin(la) * sun[1] + Math.cos(la) * Math.sin(t) * sun[2];
+    if (Math.abs(d - 0.72) < Math.abs(best - 0.72)) { best = d; lon = t; }
+  }
+  var up = [Math.cos(la) * Math.cos(lon), Math.sin(la), Math.cos(la) * Math.sin(lon)];
+  // and snapped to the nearest particle of the shell, so that the crater has
+  // something to be burned into and sits centred on it
+  var bestD = -9, bi = 0;
+  for (i = 0; i < nShell; i++) {
+    var d2 = shell[i * 3] * up[0] + shell[i * 3 + 1] * up[1] + shell[i * 3 + 2] * up[2];
+    if (d2 > bestD) { bestD = d2; bi = i; }
+  }
+  up = [shell[bi * 3], shell[bi * 3 + 1], shell[bi * 3 + 2]];
+  la = Math.asin(up[1]); lon = Math.atan2(up[2], up[0]);
+  var north = [-Math.sin(la) * Math.cos(lon), Math.cos(la), -Math.sin(la) * Math.sin(lon)];
+  var east = [-Math.sin(lon), 0, Math.cos(lon)];
 
   // The plume. The motes are spread evenly over the logarithm of the launch
   // speed rather than over mass, so that the fast few which reach the far side
@@ -961,14 +993,14 @@ function buildGlobe() {
   for (m = 0; m < 3; m++) inDir[m] = -up[m] * Math.sin(th) - (north[m] + east[m]) * Math.SQRT1_2 * Math.cos(th);
   var inL = Math.hypot(inDir[0], inDir[1], inDir[2]);
   for (m = 0; m < 3; m++) inDir[m] /= inL;
-  var standoff = 0.75;
+  var standoff = 1.9;
   for (i = 0; i < nRock; i++) {
     var kk = nShell + nEj + i, oq = kk * 4;
     for (m = 0; m < 3; m++) pos[oq + m] = up[m] - inDir[m] * standoff + (rng() - 0.5) * 0.012;
     pos[oq + 3] = G_ROCK;
     for (m = 0; m < 3; m++) vel[oq + m] = inDir[m] * vImp;
     vel[oq + 3] = 300;
-    matR[kk] = 1e-9;                                           // it weighs nothing beside the plume
+    matR[kk] = ROCK_W;                                         // it weighs nothing beside the plume, and is drawn to be seen anyway
   }
 
   if (sim) { freeTarget(sim.src); freeTarget(sim.dst); gl.deleteTexture(sim.mat); }
@@ -992,11 +1024,16 @@ function buildGlobe() {
   VIEW.setMaxPoint(26);   // a mote between the camera and the planet is still a mote
   VIEW.setRadPow(1 / 6);   // a compressed scale, like the glow's: heavier reads bigger without the light ones vanishing
   CC.setSim(sim);
-  VIEW.clampDist(1.15, 30);
+  VIEW.clampDist(1.04, 30);   // close enough in to see how small the hole is
   // ground zero sits on +x, so this puts it a quarter-turn round and a
   // little above: the plume reads better in profile against the limb than
   // head-on, where it is only a blur over the middle of the disc
-  if (framedAt !== 'globe') { cam.dist = 4.6; cam.pitch = 0.30; cam.yaw = 1.15; framedAt = 'globe'; }
+  if (framedAt !== 'globe') {
+    cam.dist = 4.4;
+    cam.yaw = Math.atan2(up[0], up[2]) + 0.45;    // a little round, so the plume reads in profile
+    cam.pitch = Math.asin(up[1]) + 0.14;
+    framedAt = 'globe';
+  }
   report = null; CC.setReport(null); stepAcc = 0; run.paused = false;
   $('btn-pause').classList.remove('paused');
   $('hud-report').hidden = true; lastReport = '';
@@ -1021,6 +1058,8 @@ function setGlobeUniforms() {
   gl.uniform1f(u.uFell, G_FELL); gl.uniform1f(u.uRock, G_ROCK);
   gl.uniform1f(u.uHot, 4000);
   gl.uniform1f(u.uLay, 0.004);
+  gl.uniform1f(u.uCrat, G_CRATER);
+  gl.uniform1f(u.uCosCrat, Math.cos(0.5 * sim.Dfr / E_L));
 }
 
 function globeStep() {
@@ -1041,7 +1080,7 @@ function globeStep() {
 // 20 km/s it would otherwise cross that gap in half a second. The shell and
 // the parked plume are held through it and keep the velocities they were
 // built with; the rock is the only thing moving.
-var INBOUND_FRAMES = 70;
+var INBOUND_FRAMES = 210;
 function inboundStep() {
   var dtF = sim.standoff / sim.vImp / INBOUND_FRAMES;
   gl.useProgram(globeProg.p);
@@ -1223,7 +1262,7 @@ function globeReport(rep) {
     ['layer', mm(r.layerFar), 'past 60° · K–Pg is 2–3 mm · ' + mm(r.layerNear) + ' near'],
     ['suborbital', pct(r.fastOrb / Math.max(r.total, 1e-9)), 'left past 7.9 km/s · ' + pct(r.fastEsc / Math.max(r.total, 1e-9)) + ' escaped for good'],
     ['re-entry', (r.pulse / 1e6).toFixed(0) + ' MJ/m²', 'handed to the air coming down · peak ' + Math.round(r.hottest / 1000) + ' 000 K'],
-    ['crater', Math.round(s.Dfr / 1000) + ' km', 'the crater view digs it · observed 180–200'],
+    ['crater', Math.round(s.Dfr / 1000) + ' km', (100 * s.Dfr / (2 * E_L)).toFixed(1) + ' % of Earth across — zoom in, it is that dot'],
     ['seismic', 'M' + s.Mw.toFixed(1), 'Schultz & Gault']
   ]);
 }
@@ -1361,8 +1400,8 @@ window.__impact = {
     if (!sim || sim.t > t) build();
     while (sim.phase === 'settle') settleSome(64);
     var guard = 0;
-    while (sim.phase === 'approach' && guard++ < 4000) approachStep();
-    while (sim.phase === 'inbound' && guard++ < 4000) inboundStep();
+    while (sim.phase === 'approach' && sim.t < t && guard++ < 4000) approachStep();
+    while (sim.phase === 'inbound' && sim.t < t && guard++ < 4000) inboundStep();
     while (sim.phase === 'full' && sim.t < t) { if (sim.view === 'globe') globeStep(); else step(false); sim.t += sim.dt; }
     analyze();
     run.paused = true; $('btn-pause').classList.add('paused');
