@@ -1,0 +1,322 @@
+/* The HUD, shared by every scenario page. Same night as the main page — every color explicit. */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #04060a;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+/* the picture and the readouts both live in the *visible* viewport: on a
+   phone 100vh runs on under the browser's own bars, and the clock at the
+   bottom goes under with it */
+#stage {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  display: block;
+  touch-action: none;
+  cursor: grab;
+}
+#stage.dragging { cursor: grabbing; }
+/* the HUD hangs off this, so every corner it names is a corner the phone
+   actually shows — inside the notch, the island and the home bar */
+#hud-layer {
+  position: fixed;
+  left: env(safe-area-inset-left, 0px);
+  right: env(safe-area-inset-right, 0px);
+  top: env(safe-area-inset-top, 0px);
+  height: calc(100% - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  z-index: 2;
+  pointer-events: none;
+}
+.hud {
+  position: absolute;
+  pointer-events: none;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.7;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #66788c;
+  user-select: none;
+}
+.hud strong {
+  display: block;
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0.3em;
+  color: #c2d4e6;
+}
+.hud button {
+  background: none;
+  border: none;
+  margin: 0;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  padding: 0 0 3px;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: #66788c;
+  cursor: pointer;
+  border-bottom: 1px solid transparent;
+}
+.hud button:hover { color: #9db0c4; }
+.hud button:focus-visible { outline: 1px solid #66788c; outline-offset: 3px; }
+.hud button.on { color: #c2d4e6; border-bottom-color: #c2d4e6; }
+.hud button .ic {
+  margin-right: 6px;
+  font-size: 12px;
+  filter: saturate(0.6) brightness(0.9);
+}
+.hud button.on .ic { filter: none; }
+#hud-title { top: 22px; left: 26px; }
+#hud-corner {
+  top: 22px;
+  right: 26px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+#hud-back {
+  display: flex;
+  align-items: center;
+  touch-action: manipulation;
+  gap: 9px;
+  padding: 8px 14px;
+  color: #c2d4e6;
+  text-decoration: none;
+  background: rgba(8, 12, 18, 0.7);
+  border: 1px solid #2a3644;
+  border-radius: 4px;
+}
+#hud-back:hover { border-color: #66788c; color: #ffffff; background: rgba(16, 24, 34, 0.85); }
+#hud-controls {
+  top: 96px;
+  left: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  pointer-events: auto;
+}
+#hud-preset, #hud-run { display: flex; gap: 6px 16px; flex-wrap: wrap; align-items: baseline; }
+#hud-run { gap: 6px 12px; align-items: center; }
+#hud-run .sep { color: #3d4a58; }
+/* pause and restart are pressed, not read: they are a shape, and a small
+   square of one holds a fingertip where a word underlined does not */
+.hud .iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid #2a3644;
+  border-bottom-color: #2a3644;
+  border-radius: 4px;
+  background: rgba(8, 12, 18, 0.7);
+  color: #c2d4e6;
+}
+.hud .iconbtn:hover { border-color: #66788c; color: #ffffff; background: rgba(16, 24, 34, 0.85); }
+.hud .iconbtn svg { display: block; width: 13px; height: 13px; fill: currentColor; }
+#hud-src { text-decoration: none; }
+#hud-src svg { width: 15px; height: 15px; }
+#btn-pause .i-play, #btn-pause.paused .i-pause { display: none; }
+#btn-pause.paused .i-play { display: inline; }
+#adv-panel {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  width: fit-content;
+  box-sizing: border-box;          /* fitPanel() hands it a height; the padding has to live inside it */
+  overflow-y: auto;                 /* eleven rows do not fit a phone on its side: fitPanel() caps it and the rest scrolls */
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #2a3644 transparent;
+  gap: 6px;
+  padding: 12px 14px;
+  background: rgba(8, 12, 18, 0.78);
+  border: 1px solid #22303e;
+  border-radius: 4px;
+}
+#adv-panel[hidden] { display: none; }
+#adv-panel::-webkit-scrollbar { width: 5px; }
+#adv-panel::-webkit-scrollbar-thumb { background: #2a3644; border-radius: 3px; }
+#adv-panel::-webkit-scrollbar-track { background: transparent; }
+#adv-panel label {
+  display: grid;
+  grid-template-columns: 88px 110px 40px;
+  align-items: center;
+  gap: 9px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+#adv-panel input[type="range"] {
+  width: 110px;
+  accent-color: #7f9cbb;
+  cursor: pointer;
+}
+#adv-panel input[type="checkbox"] {
+  justify-self: start;
+  width: 14px;
+  height: 14px;
+  accent-color: #7f9cbb;
+  cursor: pointer;
+}
+#adv-panel span { text-align: right; color: #9db0c4; font-variant-numeric: tabular-nums; }
+#adv-panel .note { margin: 1px 0 2px; padding-top: 6px; border-top: 1px solid #1a2430; font-size: 9px; letter-spacing: 0.08em; color: #3d4a58; text-transform: none; }
+/* A readout that moves is a readout nobody can follow. Every row is always
+   there — an absent second body says so rather than closing the gap — the
+   name, the number and the note each keep a column of their own, and the box
+   keeps its width, so between one look and the next only the digits change.
+   The widths are in ch: the face is monospace, so a column is a count of
+   characters, and letter-spacing is off because it would put the count out. */
+#hud-report {
+  bottom: 64px;
+  right: 26px;
+  padding: 10px 12px;
+  background: rgba(8, 12, 18, 0.78);
+  border: 1px solid #22303e;
+  border-radius: 4px;
+  font-size: 10px;
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 1.65;
+  color: #9db0c4;
+  font-variant-numeric: tabular-nums;
+  display: grid;
+  grid-template-columns: 9ch 10ch 1fr;
+  column-gap: 11px;
+  width: 72ch;   /* the longest note the run can produce, measured, and two characters of slack */
+  box-sizing: border-box;
+}
+#hud-report[hidden] { display: none; }
+#hud-report b { font-weight: 500; color: #c2d4e6; white-space: nowrap; }
+#hud-report .v { text-align: right; color: #c2d4e6; white-space: nowrap; }
+#hud-report i { font-style: normal; color: #566574; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }   /* if a note ever outgrows the column, say so rather than cut it off mid-word */
+#hud-help { bottom: 20px; left: 26px; }
+#hud-stat { bottom: 20px; right: 26px; text-align: right; font-variant-numeric: tabular-nums; }
+#hud-stat strong { font-size: 15px; letter-spacing: 0.2em; }
+#fallback {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  color: #8a97a6;
+  background: #04060a;
+  text-align: center;
+  padding: 24px;
+}
+/* a fingertip is not a cursor: the three-pixel band under a word is not a
+   button anyone can hit */
+@media (pointer: coarse) {
+  .hud button { padding: 6px 0 7px; }
+  #adv-panel { background: rgba(6, 9, 14, 0.93); }   /* upright it lies over the planet, and 0.78 was not enough to read through */
+  .hud .iconbtn { width: 36px; height: 36px; }
+  .hud .iconbtn svg { width: 15px; height: 15px; }
+  #hud-src svg { width: 17px; height: 17px; }
+  #adv-panel input[type="range"] { height: 26px; }
+  #adv-panel input[type="checkbox"] { width: 18px; height: 18px; }
+}
+/* ---------- a phone held upright ---------- */
+@media (max-width: 640px) {
+  #hud-help { display: none; }
+  #hud-title { top: 14px; left: 16px; }
+  #hud-title strong { font-size: 12px; letter-spacing: 0.22em; }   /* the name is long; it has to clear the corner link */
+  #hud-corner { top: 14px; right: 16px; }
+  #hud-back { padding: 8px 10px; }
+  #hud-controls { top: 78px; left: 16px; right: 16px; gap: 10px; }
+  .hud { font-size: 12px; }
+  #hud-preset, #hud-run { gap: 4px 14px; }
+  #adv-panel { width: auto; max-width: calc(100vw - 64px); }   /* on a phone it spans the column, sliders and all */
+  #adv-panel label { grid-template-columns: 88px 1fr 48px; }   /* narrower and "impactor M⊕" folds in two */
+  #adv-panel input[type="range"] { width: 100%; }
+  #hud-back { display: none; }   /* one corner, one link: the source */
+  /* the clock and the run's numbers share a line, pushed to the two edges */
+  #hud-stat {
+    left: 16px;
+    right: 16px;
+    bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+  }
+  #hud-stat strong { font-size: 13px; letter-spacing: 0.18em; }
+  #hud-report {
+    bottom: 42px;
+    left: 16px;
+    right: 16px;
+    width: auto;
+    grid-template-columns: 8ch 9ch 1fr;
+    column-gap: 8px;
+    font-size: 9px;
+    line-height: 1.6;
+  }
+}
+/* ---------- a phone laid on its side, and any short window ---------- */
+/* 390 points of height with the browser's bars inside it: the panel and the
+   report give room up rather than run off the bottom */
+@media (max-height: 560px) {
+  #hud-help { display: none; }
+  #hud-title { top: 10px; left: 14px; }
+  #hud-title strong { font-size: 12px; letter-spacing: 0.22em; }
+  #hud-corner { top: 10px; right: 14px; }
+  #hud-back { padding: 6px 10px; }
+  #hud-controls {
+    top: 54px;
+    left: 14px;
+    right: auto;
+    max-width: min(52vw, 330px);
+    gap: 8px;
+  }
+  #hud-preset, #hud-run { gap: 2px 14px; }
+  .hud button { padding: 4px 0 5px; }   /* every row given back is a row of panel */
+  #hud-run { gap: 4px 12px; }
+  .hud .iconbtn { width: 32px; height: 32px; }
+  #adv-panel {
+    width: auto;
+    max-width: 100%;
+    gap: 4px;
+    margin-top: 6px;
+    padding: 9px 11px;
+  }
+  #adv-panel label { grid-template-columns: 88px 1fr 42px; }
+  #adv-panel input[type="range"] { width: 100%; }
+  #hud-back { display: none; }
+  #hud-stat {
+    left: 14px;
+    right: 14px;
+    bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+  }
+  #hud-stat strong { font-size: 13px; letter-spacing: 0.18em; }
+  #hud-report {
+    bottom: 38px;
+    right: 14px;
+    left: auto;
+    width: 44vw;
+    grid-template-columns: 8ch 9ch 1fr;
+    column-gap: 8px;
+    max-height: calc(100dvh - 130px);
+    overflow: hidden;
+    font-size: 9px;
+    line-height: 1.6;
+  }
+}

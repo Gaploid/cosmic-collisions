@@ -38,18 +38,19 @@ disk and the re-accretion are all there.
 
 ## Tech
 
-One self-contained page, no dependencies and no build step. It is WebGL 2 with
-no compute shaders to lean on, so the hard parts are tricks: contacts from a
-hashed grid filled by depth-peeling, gravity from a 64³ particle mesh with the
-loose material corrected pairwise against it, P³M-style, so moonlets bind
-instead of smearing. Its bodies are onions of Fibonacci-spiral shells — a
-lattice cut to a sphere is terraced, and the skin drew every step as a ring —
-relaxed and then crept into equilibrium so that nothing pops out of the surface.
-Symplectic Euler, Morton order, and books on momentum and energy that caught
-most of what was wrong. The picture is screen-space fluid rendering — impostors,
-a bilateral blur that melts them into a skin, a coverage cut that takes the
-beads off the limb — with hot rock glowing by its temperature and lighting
-everything else. ACES and FXAA.
+A page per scenario over a shared engine in `src/`, wired with plain script
+tags — no dependencies, no build step, and a page still opens from disk. It is
+WebGL 2 with no compute shaders to lean on, so the hard parts are tricks:
+contacts from a hashed grid filled by depth-peeling, gravity from a 64³
+particle mesh with the loose material corrected pairwise against it,
+P³M-style, so moonlets bind instead of smearing. Its bodies are onions of
+Fibonacci-spiral shells — a lattice cut to a sphere is terraced, and the skin
+drew every step as a ring — relaxed and then crept into equilibrium so that
+nothing pops out of the surface. Symplectic Euler, Morton order, and books on
+momentum and energy that caught most of what was wrong. The picture is
+screen-space fluid rendering — impostors, a bilateral blur that melts them
+into a skin, a coverage cut that takes the beads off the limb — with hot rock
+glowing by its temperature and lighting everything else. ACES and FXAA.
 
 ## The sky
 
