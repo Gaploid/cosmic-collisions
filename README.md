@@ -64,6 +64,26 @@ collapses, wider and shallower, into the crater that is there today.
 - **Advanced panel** — impactor diameter, speed, angle, the thickness of the
   sediment and the density of the target restart the run.
 
+### The planet
+
+The Earth the giant impact is made of — a hundred thousand grains under their
+own gravity, with contacts and heat, on the same engine — and a rock thrown at
+it. This is the view where the surface breaks, and the one that has to be
+honest about why it mostly cannot: at 131k grains Earth's grain is 218 km
+across, and Chicxulub's rock was 14. The rock is always built at its true mass
+and drawn as however many grains that is worth — one, when it is worth less
+than one — so the *chicxulub* button does exactly what a 14 km rock does to a
+planet, which is nothing anyone can see, and says so. From a few hundred
+kilometres up the surface starts to go: *300 km* is two grains and a glow,
+*1000 km* — Ceres-sized, and where the view opens — is sixty-three grains, a
+white wound and a spray of ejecta into orbit, *2000 km* is a basin the size of
+a continent with the whole hemisphere lit. The readout gives the energy in
+multiples of Chicxulub, the rock in grains, what was thrown off and where it
+went, and the books.
+
+Above 2000 km this hands over to the giant-impact page, whose smallest rock is
+0.02 M⊕ — the two pages tile the axis between them.
+
 ### The first day
 
 The whole planet, and the same impact seen from far enough away that the crater
@@ -152,6 +172,22 @@ credit.
 
 Broad strokes, newest first; the commit history tells each one in full.
 
+- **2026-08-27 — The planet.** Asked for the Earth to be breakable — the
+  particle planet of the giant impact, with the rock going into it — and it
+  is: the engine that runs Theia moved out of its page into `src/nbody.js`,
+  and Chicxulub's page got a third view that builds Earth out of it and throws
+  a rock. The honest part is the rock's size. A 14 km stone is a six-thousandth
+  of one grain, so it is built at its true mass, drawn as the one grain it is
+  worth, and does nothing — which is the right answer, and the readout says
+  so rather than hiding it. From a few hundred kilometres the surface starts
+  to go, and the view opens on a Ceres-sized rock, where it does. On the way
+  out of the page the engine picked up two things a small rock needs: a core
+  fraction of its own, and a grain count and mass set by the caller. The
+  extraction is checked the way the split was — Theia at t = 4, to nine
+  decimals — after one bug, found by bisecting the run stage by stage: the
+  options object was named `o`, and so was the offset the build loop used, so
+  every parameter read after the first loop came back undefined and the
+  contact dashpot was NaN.
 - **2026-08-27 — The first day.** The crater is the small half of Chicxulub.
   The other half is what came out of it, and that is a whole-planet story: a
   plume leaving faster than the atmosphere can hold it, over the horizon inside

@@ -35,13 +35,10 @@
 </div>
 <div id="hud-preset">
   <button data-view="crater" class="on"><span class="ic">⛏️</span>crater</button>
+  <button data-view="planet"><span class="ic">🪐</span>planet</button>
   <button data-view="globe"><span class="ic">🌍</span>first day</button>
   <span class="sep">·</span>
-  <button data-preset="chicxulub" class="on"><span class="ic">☄️</span>chicxulub</button>
-  <button data-preset="vertical"><span class="ic">⬇️</span>vertical</button>
-  <button data-preset="grazing"><span class="ic">↘️</span>grazing</button>
-  <button data-preset="small"><span class="ic">🪨</span>1 km</button>
-  <button data-preset="big"><span class="ic">💀</span>30 km</button>
+  <span id="hud-preset-list"></span>
 </div>
 <div id="hud-run">
   <button id="btn-pause" class="iconbtn" aria-label="pause" title="pause — space"><svg viewBox="0 0 14 14" aria-hidden="true"><rect class="i-pause" x="3" y="2" width="2.8" height="10" rx="0.4"/><rect class="i-pause" x="8.2" y="2" width="2.8" height="10" rx="0.4"/><path class="i-play" d="M3.6 2 L11.4 7 L3.6 12 Z"/></svg></button>
@@ -87,6 +84,7 @@
 <script src="src/stars.js"></script>
 <script src="src/gl.js"></script>
 <script src="src/view.js"></script>
+<script src="src/nbody.js"></script>
 <script>
 (function () {
 'use strict';
@@ -436,11 +434,16 @@ VIEW.init({ gl: gl, canvas: canvas, S: S, starVao: sky.vao, starCount: sky.count
                      bloom: bloomProg, tone: toneProg, fxaa: fxaaProg, star: starProg } });
 var render = VIEW.render, resize = VIEW.resize, governQuality = VIEW.governQuality, cam = VIEW.cam;
 
+// the giant impact's engine, for the view where the planet is made of grains
+var NB = CC.nbody;
+NB.init({ gl: gl, floatBlend: boot.floatBlend });
+
 var MATH = CC.math, BODIES = CC.bodies;
 var mulberry = MATH.mulberry, ball = BODIES.ball;
 
 var grid = null;
 var sim = null, report = null;
+CC.onReport(function (r) { if (sim && sim.view === 'planet') report = r; });   // the engine's analysis comes back through the shell
 var stepAcc = 0;
 var run = CC.run;
 
@@ -496,7 +499,18 @@ function latticeFill(nWant, R, D, rng) {
 var gen = 0, framedAt = 0;
 // the two ends of the same impact: the hole it digs, and where what came out
 // of the hole ends up. They share the impact and the scaling and nothing else.
-function build() { framedAt = 0; if (S.view === 'globe') buildGlobe(); else buildCrater(); }
+function build() { framedAt = 0; if (S.view === 'globe') buildGlobe(); else if (S.view === 'planet') buildPlanet(); else buildCrater(); }
+// each view has its own presets, and its own idea of how big a rock is worth
+// a button: the crater's go to 30 km, the planet's start where a grain does
+var PRESET_ICONS = { chicxulub: '☄️', vertical: '⬇️', grazing: '↘️', small: '🪨', big: '💀', p300: '🪨', p1000: '🌑', p2000: '💀' };
+function presetsFor() { return S.view === 'planet' ? PLANET_PRESETS : PRESETS; }
+function renderPresets() {
+  var P = presetsFor(), html = '';
+  for (var k in P) html += '<button data-preset="' + k + '"' + (k === S.preset ? ' class="on"' : '') + '><span class="ic">' + PRESET_ICONS[k] + '</span>' + P[k].label + '</button>';
+  $('hud-preset-list').innerHTML = html;
+  var el = $('set-imp'), planet = S.view === 'planet';
+  el.min = planet ? 14 : 1; el.max = planet ? 2500 : 30; el.step = planet ? 2 : 0.5;
+}
 function buildCrater() {
   var N = N_CHOICES[S.nIdx];
   var W = N >= 131072 ? 512 : N >= 32768 ? 256 : 128, H = N / W;
@@ -1161,6 +1175,121 @@ function globeStats(N, mPer, P, V, R, o) {
            pulse: entryE / (4 * Math.PI * area) };
 }
 
+// ---------- the planet ----------
+// The Earth the giant impact is made of — a hundred thousand grains under
+// their own gravity, with contacts and heat — and a rock thrown at it. This is
+// the view that shows the surface break, and the one that has to be honest
+// about why it mostly cannot: at 131k grains Earth's grain is 174 km across,
+// and Chicxulub's rock was 14. The rock is always built at its true mass, and
+// drawn as however many grains that is worth — one, when it is worth less
+// than one — so the 14 km button does exactly what a 14 km rock does to a
+// planet, which is nothing anyone can see. From a few hundred kilometres up
+// the surface starts to go; the readout says at every size how many grains
+// the rock is and how many times Chicxulub.
+var M_EARTH = 5.972e24, R_EARTH = 6.371e6, RHO_EARTH = 5515;
+var RHO_ROCK = 2630;                                     // a carbonaceous chondrite, as Fischer-Gödde et al. found it
+var EARTH_DAY_H = 23.5;                                  // the day at the end of the Cretaceous
+var PLANET_PRESETS = {
+  chicxulub: { imp: 14,   vimp: 20, angle: 60, label: 'chicxulub' },   // one grain, at a six-thousandth of a grain's mass
+  p300:      { imp: 300,  vimp: 20, angle: 60, label: '300 km' },
+  p1000:     { imp: 1000, vimp: 20, angle: 60, label: '1000 km' },     // Ceres-sized: the smallest rock this grain can see
+  p2000:     { imp: 2000, vimp: 20, angle: 60, label: '2000 km' }
+};
+// Earth's core silver, mantle red, crust the blue of the giant impact's; the
+// rock the dark of the chondrite it is, through and through — it never
+// differentiated, so it has no core to be gold
+var PLANET_PAL = [[0.86, 0.86, 0.82], [0.60, 0.22, 0.17], [0.40, 0.58, 0.90], [0, 0, 0],
+                  [0.34, 0.29, 0.25], [0.34, 0.29, 0.25], [0.30, 0.26, 0.23], [0, 0, 0]];
+// Chicxulub, for the readout's "× chicxulub": 14 km at 20 km/s
+var E_CHICX = 0.5 * Math.PI / 6 * Math.pow(14e3, 3) * RHO_ROCK * 20e3 * 20e3;
+
+function buildPlanet() {
+  var N = N_CHOICES[S.nIdx];
+  var dKm = S.imp, d = dKm * 1e3;
+  var mImp = Math.PI / 6 * d * d * d * RHO_ROCK;                  // kg
+  var q = mImp / M_EARTH, dens = RHO_ROCK / RHO_EARTH;
+  // how many grains the rock is worth at Earth's own spacing — and one when
+  // it is worth less than one, at its true mass regardless
+  var nNat = N * (q / dens) / (1 + q / dens);
+  var n2 = Math.max(1, Math.round(nNat));
+  // the engine states the impact speed as a multiple of escape speed at
+  // contact; this page states it in km/s, so the one is turned into the other
+  var R2 = Math.cbrt(q / dens), vesc = Math.sqrt(2 * (1 + q) / (1 + R2));   // in units of √(GM⊕/R⊕)
+  var vfac = (S.vimp * 1e3 / (NB.V_UNIT * 1e3)) / vesc;
+  // the engine's angle is between the velocity and the line of centres at
+  // contact — 0 head-on, 90 grazing; this page's is off the horizontal
+  var angle = 90 - S.angle;
+  // Earth's spin as a fraction of breakup: a 23.5-hour day against the
+  // 84-minute breakup period. The rock does not turn; nobody would see it
+  var spin0 = (2 * Math.PI * NB.T_UNIT / 3600) / EARTH_DAY_H;
+  NB.build({ nIdx: S.nIdx, q: q, dens: dens, core: 0.325, coreImp: 0, spin0: spin0, spin1: 0,
+             angle: angle, vfac: vfac, rest: S.rest, n2: n2, mImp: q });
+  sim = NB.sim;
+  sim.view = 'planet';
+  sim.L = R_EARTH; sim.T = NB.T_UNIT; sim.V = NB.V_UNIT * 1e3;
+  sim.dKm = dKm; sim.mImp = mImp; sim.nNat = nNat;
+  sim.energy = 0.5 * mImp * S.vimp * 1e3 * S.vimp * 1e3;
+  sim.grainKm = 2 * sim.a * R_EARTH / 1e3;
+  VIEW.setPalette(PLANET_PAL);
+  VIEW.setMaxPoint(0);
+  VIEW.setRadPow(0);
+  VIEW.clampDist(1.5, 80);
+  // the rock comes in from −x and strikes the near side of that; the camera
+  // sits off that side, a little round and above, where the sun already is
+  if (framedAt !== 'planet') { cam.dist = 3.4; cam.pitch = 0.32; cam.yaw = -0.95; framedAt = 'planet'; }
+  report = null; stepAcc = 0; run.paused = false;
+  $('btn-pause').classList.remove('paused');
+  $('hud-report').hidden = true; lastReport = '';
+}
+
+// What the rock did to the planet, from the engine's own analysis: the
+// friends-of-friends that the giant impact reads its moon off. There is no
+// crater row, because a hole is not a thing that pass measures; what it
+// measures is what left — thrown into orbit, thrown away for good — and what
+// the planet came out as.
+function planetReport(rep) {
+  var r = report, s = sim, KG = M_EARTH;
+  var pct = function (x) { return (100 * x).toFixed(x < 0.01 ? 2 : x < 0.1 ? 1 : 0) + ' %'; };
+  var Mt = s.energy / MT_TNT;
+  var eStr = Mt >= 1e12 ? (Mt / 1e12).toFixed(0) + ' Et TNT' : Mt >= 1e9 ? (Mt / 1e9).toFixed(0) + ' Pt TNT' : Mt >= 1e6 ? (Mt / 1e6).toFixed(0) + ' Tt TNT' : Mt >= 1e3 ? (Mt / 1e3).toFixed(0) + ' Gt TNT' : Math.round(Mt) + ' Mt TNT';
+  var times = s.energy / E_CHICX;
+  var xChx = times >= 1e6 ? (times / 1e6).toFixed(1) + ' million × chicxulub' : times >= 1e3 ? Math.round(times / 1e3) + ' thousand × chicxulub' : times >= 10 ? Math.round(times) + ' × chicxulub' : times.toFixed(1) + ' × chicxulub';
+  var grains = s.n2 + (s.n2 === 1 ? ' grain' : ' grains');
+  var grainNote = s.nNat < 1
+    ? 'at 1/' + Math.round(1 / s.nNat).toLocaleString('en') + ' of a ' + Math.round(s.grainKm) + ' km grain'
+    : (s.dKm / s.grainKm).toFixed(1) + ' grains across · a grain is ' + Math.round(s.grainKm) + ' km';
+  // A rock lighter than a grain is also lighter than the step was set for:
+  // its spring rings seventy times faster than the integrator looks, so what
+  // it does after touching — here, leave again — is the integrator's doing,
+  // not the rock's. It is taken out of the thrown-off figure and said.
+  var sub = s.nNat < 1 && r.largestImp < 1e-6;
+  var thrown = Math.max(0, (r.orbit + r.escape) * KG - (sub ? s.mImp : 0));
+  var thrownNote = sub
+    ? 'besides the rock itself, whose bounce is the step’s and not the rock’s'
+    : fmtMass(r.orbit * KG) + ' in orbit · ' + fmtMass(r.escape * KG) + ' for good';
+  var sec = r.second;
+  if (DEV.compact) {
+    showReport(rep, [
+      ['energy', s.energy.toExponential(1) + ' J', xChx],
+      ['rock', s.dKm + ' km', grains + ' · ' + grainNote],
+      ['thrown off', fmtMass(thrown), fmtMass(r.escape * KG) + ' for good'],
+      ['heat', Math.round(r.Q / r.M * NB.E_KG / NB.CP_ROCK / 10) * 10 + ' K', 'over the whole planet']
+    ]);
+    return;
+  }
+  var ref = s.ref, E = r.KE + r.PE + r.EL;
+  var sgn = function (x, d) { var t = Math.abs(x).toFixed(d); return (parseFloat(t) === 0 ? '' : x < 0 ? '−' : '+') + t; };
+  showReport(rep, [
+    ['energy', s.energy.toExponential(2) + ' J', eStr + ' · ' + xChx],
+    ['rock', s.dKm + ' km', grains + ' · ' + grainNote],
+    ['planet', r.largest.toFixed(4) + ' M⊕', pct(r.largestIron) + ' iron · ' + pct(r.largestImp) + ' rock' + (r.day < 200 ? ' · day ' + r.day.toFixed(1) + ' h' : '')],
+    ['thrown off', fmtMass(thrown), thrownNote],
+    ['surface', Math.round(r.Tsurf / 100) * 100 + ' K', 'the hot patches’ glow · ' + Math.round(r.Q / r.M * NB.E_KG / NB.CP_ROCK / 10) * 10 + ' K averaged over the planet'],
+    ['2nd body', sec ? fmtMass(sec.mass * KG) : '—', sec ? sec.dist.toFixed(1) + ' R⊕ · ' + (sec.bound ? 'bound' : 'unbound') + ' · ' + pct(sec.imp) + ' rock' : ''],
+    ['books', (ref ? sgn((r.L - ref.L) / ref.L * 100, 2) + ' % L' : '—'), (ref ? 'energy ' + sgn((E + r.Q - ref.EQ) / Math.abs(ref.E) * 100, 2) + ' % · ' : '') + 'drift ' + (r.drift * NB.V_UNIT * 1000).toFixed(1) + ' m/s']
+  ]);
+}
+
 // ---------- HUD ----------
 function fmtTime(t) {
   var sec = Math.abs(t) * (sim ? sim.T : T_UNIT), sign = t < 0 ? '−' : '+';
@@ -1176,6 +1305,8 @@ function fmtKm(x) { return x >= 100 ? Math.round(x) + ' km' : x.toFixed(1) + ' k
 // a mass in kilograms, as tonnes with a prefix anyone can hold
 function fmtMass(kg) {
   var t = kg / 1000;
+  if (t >= 1e18) return (t / 1e18).toFixed(t >= 1e19 ? 0 : 1) + ' Et';
+  if (t >= 1e15) return (t / 1e15).toFixed(t >= 1e16 ? 0 : 1) + ' Pt';
   if (t >= 1e12) return (t / 1e12).toFixed(t >= 1e13 ? 0 : 1) + ' Tt';
   if (t >= 1e9) return (t / 1e9).toFixed(t >= 1e10 ? 0 : 1) + ' Gt';
   if (t >= 1e6) return (t / 1e6).toFixed(1) + ' Mt';
@@ -1194,20 +1325,22 @@ function showReport(rep, rows) {
 }
 var fpsFrames = 0, fpsT0 = performance.now(), fps = 0;
 function hud() {
-  var sub = PRESETS[S.preset] ? PRESETS[S.preset].label : 'custom';
+  var sub = presetsFor()[S.preset] ? presetsFor()[S.preset].label : 'custom';
   if (!sim) sub += ' · building';
   else if (sim.phase === 'settle') sub += ' · settling ' + Math.round(100 * (1 - sim.settleLeft / sim.settleTotal)) + '%';
   else if (run.paused) sub += ' · paused';
   else if (sim.phase === 'approach' || sim.phase === 'inbound') sub += ' · inbound';
+  else if (sim.view === 'planet') sub += sim.t - sim.impactT < 2.5 ? ' · impact' : ' · aftermath';
   else if (sim.view === 'globe') sub += sim.t * sim.T < 1800 ? ' · the plume' : ' · coming down';
   else if (sim.t < 10) sub += ' · excavating';
   else sub += ' · collapse';
   $('hud-sub').textContent = sub;
   $('hud-clock').textContent = sim ? fmtTime(sim.t) : 'T− 0m 00.0s';
-  $('hud-fps').textContent = sim ? fmtCount(sim.N) + (DEV.compact ? '' : ' bodies') + ' · ' + Math.round(sim.a * L_UNIT / 500) / 2 + ' km grain · ' + fps + ' fps' : '';
+  $('hud-fps').textContent = sim ? fmtCount(sim.N) + (DEV.compact ? '' : ' bodies') + ' · ' + Math.round(2 * sim.a * sim.L / 1000 * 10) / 10 + ' km grain · ' + fps + ' fps' : '';
   var rep = $('hud-report');
   if (!report || !sim) return;
   if (sim.view === 'globe') { globeReport(rep); return; }
+  if (sim.view === 'planet') { planetReport(rep); return; }
   var r = report, dash = '—';
   var Mt = sim.energy / MT_TNT;
   var eStr = Mt >= 1e6 ? (Mt / 1e6).toFixed(0) + ' Tt TNT' : Mt >= 1e3 ? (Mt / 1e3).toFixed(0) + ' Gt TNT' : Math.round(Mt) + ' Mt TNT';
@@ -1268,13 +1401,26 @@ function globeReport(rep) {
 }
 
 // ---------- the loop ----------
+// the planet view's frame is the giant impact's: the engine settles, flies
+// the rock in on rails, and steps the collision
+function planetFrame() {
+  if (sim.phase === 'settle') NB.settleSome(Math.max(2, Math.round(65536 / sim.N * 16)));
+  else if (run.paused) return;
+  else if (sim.phase === 'approach') NB.rigidStep(0.0025 * S.speed);
+  else {
+    stepAcc += S.speed;
+    var guard = 0;
+    while (stepAcc >= 1 && guard++ < 32 && sim.phase === 'full') { NB.step(false, false); sim.t += sim.dt; stepAcc -= 1; }
+  }
+}
 var frameNo = 0;
 function frame() {
   if (run.lost) return;
   requestAnimationFrame(frame);
   resize();
   if (sim) {
-    if (sim.phase === 'settle') settleSome(Math.max(2, Math.round(65536 / sim.N * 16)));
+    if (sim.view === 'planet') planetFrame();
+    else if (sim.phase === 'settle') settleSome(Math.max(2, Math.round(65536 / sim.N * 16)));
     else if (sim.phase === 'approach') { if (!run.paused) approachStep(); }
     else if (sim.phase === 'inbound') { if (!run.paused) inboundStep(); }
     else if (!run.paused) {
@@ -1287,7 +1433,11 @@ function frame() {
     }
   }
   render();
-  if (sim && sim.phase === 'full' && (frameNo % ANALYZE_EVERY === 0 || sim.stepNo - analyzedAt >= 360)) analyze();
+  if (sim && sim.view === 'planet') {
+    if (NB.pending) NB.collect();
+    if (sim.phase !== 'settle' && (frameNo % ANALYZE_EVERY === 0 || sim.stepNo - NB.analyzedAt >= 360)) NB.analyze();
+  }
+  else if (sim && sim.phase === 'full' && (frameNo % ANALYZE_EVERY === 0 || sim.stepNo - analyzedAt >= 360)) analyze();
   frameNo++;
   fpsFrames++;
   var now = performance.now();
@@ -1301,7 +1451,7 @@ function setOn(container, attr, value) {
   container.querySelectorAll('button[' + attr + ']').forEach(function (b) { b.classList.toggle('on', b.getAttribute(attr) === String(value)); });
 }
 function syncSliders() {
-  $('set-imp').value = S.imp; $('val-imp').textContent = S.imp < 10 ? S.imp.toFixed(1) : String(S.imp);
+  $('set-imp').value = S.imp; $('val-imp').textContent = S.imp < 10 ? S.imp.toFixed(1) : String(Math.round(S.imp));
   $('set-vimp').value = S.vimp; $('val-vimp').textContent = S.vimp;
   $('set-angle').value = S.angle; $('val-angle').textContent = S.angle;
   $('set-sed').value = S.sed; $('val-sed').textContent = S.sed.toFixed(1);
@@ -1319,12 +1469,19 @@ $('hud-preset').addEventListener('click', function (e) {
     if (S.view === vb.getAttribute('data-view')) return;
     S.view = vb.getAttribute('data-view');
     setOn($('hud-preset'), 'data-view', S.view);
+    var P = presetsFor(), pick = null;
+    if (S.view === 'planet' && S.imp < 100) pick = 'p1000';        // where a grain can see the hole; the 14 km button is right there
+    if (S.view !== 'planet' && S.imp > 30) pick = 'chicxulub';
+    if (pick) { var pp = P[pick]; S.preset = pick; S.imp = pp.imp; S.vimp = pp.vimp; S.angle = pp.angle; }
+    else if (!P[S.preset]) S.preset = 'custom';
+    renderPresets();
+    syncSliders();
     build();
     return;
   }
   var b = e.target.closest('button[data-preset]');
   if (!b) return;
-  var p = PRESETS[b.getAttribute('data-preset')];
+  var p = presetsFor()[b.getAttribute('data-preset')];
   S.preset = b.getAttribute('data-preset'); S.imp = p.imp; S.vimp = p.vimp; S.angle = p.angle;
   setOn($('hud-preset'), 'data-preset', S.preset);
   syncSliders();
@@ -1395,9 +1552,17 @@ window.__impact = {
   get look() { return LOOK; },
   get cam() { return cam; },
   get lights() { return VIEW.lights; },
-  sortNow: function () { analyze(); return report; },
+  sortNow: function () { if (sim.view === 'planet') return NB.sortNow(); analyze(); return report; },
   runTo: function (t) {
     if (!sim || sim.t > t) build();
+    if (sim.view === 'planet') {
+      while (sim.phase === 'settle') NB.settleSome(64);
+      while (sim.phase === 'approach' && sim.t < t) NB.rigidStep(0.01);
+      while (sim.phase === 'full' && sim.t < t) { NB.step(false, false); sim.t += sim.dt; if (sim.stepNo - NB.analyzedAt >= 360) NB.analyze(true); }
+      NB.analyze(true);
+      run.paused = true; $('btn-pause').classList.add('paused');
+      return sim.t;
+    }
     while (sim.phase === 'settle') settleSome(64);
     var guard = 0;
     while (sim.phase === 'approach' && sim.t < t && guard++ < 4000) approachStep();
@@ -1410,6 +1575,7 @@ window.__impact = {
 };
 
 cam.pitch = 0.45;   // a crater has to be looked into, but from its own rim
+renderPresets();
 syncSliders();
 resize();
 build();

@@ -107,6 +107,9 @@ html, body {
   pointer-events: auto;
 }
 #hud-scene, #hud-preset, #hud-run { display: flex; gap: 6px 16px; flex-wrap: wrap; align-items: baseline; }
+/* a page that rebuilds its presets per view renders them into a span, whose
+   buttons then have to be the row's own flex items to take its gap */
+#hud-preset-list { display: contents; }
 /* The scenarios are a page each, so that row is links rather than buttons —
    wearing the same face as the presets under it. */
 #hud-scene a {
