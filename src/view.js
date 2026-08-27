@@ -8,6 +8,11 @@ var CC = window.CC || (window.CC = {});
 var gl = null, canvas = null, S = null, sim = null, report = null;
 var gProg, blurProg, shadeProg, sunProg, brightProg, bloomProg, toneProg, fxaaProg, starProg;
 var vao = null, starVao = null, STAR_COUNT = 0, MAX_POINT = 0;
+// A particle drawn at its own size is right when everything is at the same
+// distance from the camera. It is not right when a few motes come between the
+// camera and a planet: those draw as saucers. A page whose scene is deep can
+// cap what one is allowed to cover.
+var maxPoint = 0, radPow = 0;
 var pal = new Float32Array(24);   // eight materials, this scenario's
 var lastLights = null;
 var DEV = CC.dev, LOOK = CC.look, FOV = CC.FOV, glowCol = CC.glowCol, run = CC.run;
@@ -139,13 +144,16 @@ function render() {
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sim.src.pos);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, sim.src.vel);
     gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, sim.src.aux);
+    gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, sim.mat);
     gl.uniform1i(g.uPos, 0); gl.uniform1i(g.uVel, 1); gl.uniform1i(g.uAux, 2);
     gl.uniform2i(g.uSize, sim.W, sim.H);
     gl.uniformMatrix4fv(g.uView, false, view);
     gl.uniformMatrix4fv(g.uProj, false, proj);
+    gl.uniform1i(g.uMat, 3);
+    gl.uniform1f(g.uRadPow, radPow);
     gl.uniform1f(g.uRad, sim.a);
     gl.uniform1f(g.uPx, px);
-    gl.uniform1f(g.uMaxPt, MAX_POINT);
+    gl.uniform1f(g.uMaxPt, maxPoint);
     gl.uniform1f(g.uFat, LOOK.fat);
     gl.uniform1f(g.uP22, proj[10]);
     gl.uniform1f(g.uP32, proj[14]);
@@ -320,7 +328,7 @@ CC.view = {
 
     floatTex = GLH.floatTex; screenTarget = GLH.screenTarget; freeScreen = GLH.freeScreen; bloomTarget = GLH.bloomTarget;
 
-    vao = GLH.vao; MAX_POINT = GLH.MAX_POINT;
+    vao = GLH.vao; MAX_POINT = GLH.MAX_POINT; maxPoint = MAX_POINT;
 
     starVao = o.starVao; STAR_COUNT = o.starCount;
 
@@ -344,6 +352,9 @@ CC.view = {
   get lights() { return lastLights; },
 
   setTarget: function (t) { camTarget = t; },
+  setRadPow: function (e) { radPow = e; },
+  setMaxPoint: function (px) { maxPoint = px > 0 ? Math.min(px, MAX_POINT) : MAX_POINT; },
+  setPalette: function (p) { for (var i = 0; i < p.length && i < 8; i++) pal.set(p[i], i * 3); },
   clampDist: function (lo, hi) { distMin = lo; distMax = hi; cam.dist = Math.max(lo, Math.min(hi, cam.dist)); }
 
 };

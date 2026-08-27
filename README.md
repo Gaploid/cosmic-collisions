@@ -11,7 +11,8 @@ A page each, over one engine.
 - **[Giant impact](https://gaploid.github.io/cosmic-collisions/)** — Theia and
   the proto-Earth, and the Moon that comes out of the disk.
 - **[Chicxulub](https://gaploid.github.io/cosmic-collisions/chicxulub.html)** —
-  the impact that ended the Cretaceous, from the ejecta curtain to the collapse.
+  the impact that ended the Cretaceous, at two scales: the crater it digs, and
+  the plume that comes out of the crater and reaches the far side of the world.
 
 ## The giant impact
 
@@ -45,6 +46,8 @@ disk and the re-accretion are all there.
 
 ## Chicxulub
 
+### The crater
+
 A cylinder of the Yucatán platform — three kilometres of carbonate over
 crystalline basement, its wall and floor held still because the rest of the
 world is not in the box — and a carbonaceous asteroid arriving at 60° from the
@@ -61,6 +64,27 @@ collapses, wider and shallower, into the crater that is there today.
 - **Advanced panel** — impactor diameter, speed, angle, the thickness of the
   sediment and the density of the target restart the run.
 
+### The first day
+
+The whole planet, and the same impact seen from far enough away that the crater
+is a dot. Nothing here deforms, and a view that promised otherwise would be
+lying: the rock is a 1.6-billionth of Earth's mass, and its energy 3×10⁻⁹ of
+what pulling the planet apart would take — the giant impact next door carries
+thirty-four million times more. What flies is what came out of the hole. The
+plume leaves faster than the atmosphere can hold it, arcs over half a world,
+and is coming down everywhere within two hours; the readout follows the layer
+it lays as it goes, and the energy it hands back to the air on the way down.
+That, and not the crater, is what ended the Cretaceous.
+
+Earth is a shell of frozen particles the same renderer draws as a globe, with a
+graticule instead of coastlines — a 66 Ma shoreline is not something to draw
+from memory, and no redistributable reconstruction turned up. The motes are
+tracers, not rocks: each carries the mass its own launch speed is worth, spread
+evenly over the logarithm of that speed so the fast few which reach the far
+side are visible at all, and drawn on a compressed scale of that mass the way
+the glow is compressed. Nothing in this view is to scale except the
+trajectories, which are exact.
+
 **Where the numbers come from, and where they do not.** A contact model has no
 shock and no vapour, so it cannot be asked what a 20 km/s impact does in its
 first second. What is known is what comes out of that second, and that is what
@@ -74,6 +98,14 @@ curtain, the ballistic blanket, the rim, and the collapse that turns a deep bowl
 into a wide one. The readout prints the crater it dug beside the crater the
 scaling asked for, so the two can be compared rather than confused — across the
 five presets they agree to between 0.7 and 1.2.
+
+For the globe: the plume's total is anchored to the 25 trillion tonnes
+Chicxulub threw clear of its crater and scaled with the volume of the hole, and
+its speeds are spread by Housen & Holsapple's v^−3μ. The motes are not slowed
+by the air — modelling drag on a tracer with no size means inventing one — so
+they arrive at the speed they left with, and the readout books that energy as
+delivered to the atmosphere, which is where it really goes. Earth does not
+rotate here; over a ballistic hour that moves a landing site by a few degrees.
 
 The sulfur is not from the run at all. How much of the anhydrite reached the
 stratosphere is a question about vapour plume expansion, which needs a hydrocode;
@@ -120,6 +152,18 @@ credit.
 
 Broad strokes, newest first; the commit history tells each one in full.
 
+- **2026-08-27 — The first day.** The crater is the small half of Chicxulub.
+  The other half is what came out of it, and that is a whole-planet story: a
+  plume leaving faster than the atmosphere can hold it, over the horizon inside
+  a quarter of an hour, and coming down over the entire globe within two. So
+  the scenario has a second view — Earth as a shell of frozen particles the
+  same renderer draws as a globe, the rock arriving on it, and fifty thousand
+  tracers carrying the plume out and bringing it back. Nothing deforms, because
+  nothing can: the readout says how far short of moving the planet this is, and
+  then gets on with the part that matters, which is the layer going down
+  everywhere and the heat coming back with it. The renderer learned to size a
+  particle by what it carries, and to stop one between the camera and a planet
+  from drawing as a saucer.
 - **2026-08-27 — Chicxulub.** The page simulated one thing, and the one thing
   was a planet. This is the other end of the scale: an asteroid six thousand
   times lighter than a single particle of the giant impact, hitting ground that

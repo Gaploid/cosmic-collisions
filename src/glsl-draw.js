@@ -26,6 +26,8 @@ var G_VS = [
   'uniform mat4 uView;',
   'uniform mat4 uProj;',
   'uniform float uRad;',
+  'uniform sampler2D uMat;',
+  'uniform float uRadPow;',   // 0 — every particle the same size; 1/3 — by the cube root of its mass
   'uniform float uPx;',
   'uniform float uMaxPt;',
   'uniform float uFat;',
@@ -40,7 +42,7 @@ var G_VS = [
   '  vec4 e = uView * vec4(P.xyz, 1.0);',
   '  vNb = texelFetch(uAux, tc, 0).w;',
   '  vZc = e.z;',
-  '  vR = uRad * mix(1.0, uFat, smoothstep(0.0, 6.0, vNb));',    // packed particles run fat, so the skin has no gaps
+  '  vR = uRad * pow(max(texelFetch(uMat, tc, 0).r, 1e-9), uRadPow) * mix(1.0, uFat, smoothstep(0.0, 6.0, vNb));',    // packed particles run fat, so the skin has no gaps
   '  vMat = vec4(matColor(P.w), texelFetch(uVel, tc, 0).w);',
   '  gl_Position = uProj * e;',
   '  gl_PointSize = clamp(2.1 * vR * uPx / max(-e.z, 0.05), 1.0, uMaxPt);',
