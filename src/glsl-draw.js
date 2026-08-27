@@ -29,8 +29,6 @@ var G_VS = [
   'uniform float uPx;',
   'uniform float uMaxPt;',
   'uniform float uFat;',
-  'uniform vec3 uCol0;',
-  'uniform vec3 uCol1;',
   GLSL_MATCOL,
   'out float vZc;',
   'out float vR;',
@@ -43,7 +41,7 @@ var G_VS = [
   '  vNb = texelFetch(uAux, tc, 0).w;',
   '  vZc = e.z;',
   '  vR = uRad * mix(1.0, uFat, smoothstep(0.0, 6.0, vNb));',    // packed particles run fat, so the skin has no gaps
-  '  vMat = vec4(matColor(P.w, uCol0, uCol1), texelFetch(uVel, tc, 0).w);',
+  '  vMat = vec4(matColor(P.w), texelFetch(uVel, tc, 0).w);',
   '  gl_Position = uProj * e;',
   '  gl_PointSize = clamp(2.1 * vR * uPx / max(-e.z, 0.05), 1.0, uMaxPt);',
   '}'

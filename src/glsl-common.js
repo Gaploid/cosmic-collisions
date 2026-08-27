@@ -25,16 +25,16 @@ var GLSL_GLOW = [
   '  return c * 2.5 * (1.0 - exp(-pow(max(T - 800.0, 0.0) / uGlowT, 1.3)));',
   '}'
 ].join('\n');
-// what a body-particle is made of, from P.w = layer + 4·body: crust in the
-// body's colour, mantle a deep red, core metal — Earth's silver, the
-// impactor's gold, so its core can be followed down
+// What a particle is made of. P.w is the index of its material and the page
+// says what the eight of them look like — the giant impact spends six on two
+// bodies of core, mantle and crust (w = layer + 4·body, so the impactor's core
+// is gold against Earth's silver and can be followed down); the crater spends
+// its own on basement, platform, the impactor's melt and the frozen rock that
+// stands in for the rest of the world.
 var GLSL_MATCOL = [
-  'vec3 matColor(float w, vec3 c0, vec3 c1) {',
-  '  float body = step(3.5, w), layer = w - 4.0 * body;',
-  '  vec3 crust = mix(c0, c1, body);',
-  '  vec3 mantle = mix(vec3(0.60, 0.22, 0.17), vec3(0.58, 0.30, 0.14), body);',
-  '  vec3 core = mix(vec3(0.86, 0.86, 0.82), vec3(0.88, 0.72, 0.42), body);',
-  '  return layer > 1.5 ? crust : (layer > 0.5 ? mantle : core);',
+  'uniform vec3 uPal[8];',
+  'vec3 matColor(float w) {',
+  '  return uPal[clamp(int(w + 0.5), 0, 7)];',
   '}'
 ].join('\n');
 

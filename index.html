@@ -29,6 +29,10 @@
 <div class="hud" id="hud-title"><strong>Cosmic Collisions</strong><span id="hud-sub">initializing…</span></div>
 <div class="hud" id="hud-corner"><a id="hud-back" href="https://gaploid.github.io/stardust/">stardust ↗</a><a id="hud-src" class="iconbtn" href="https://github.com/Gaploid/cosmic-collisions" target="_blank" rel="noopener" aria-label="source on GitHub" title="source on GitHub"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></a></div>
 <div class="hud" id="hud-controls">
+<div id="hud-scene">
+  <a class="on" href="index.html"><span class="ic">🌙</span>giant impact</a>
+  <a href="chicxulub.html"><span class="ic">☄️</span>Chicxulub</a>
+</div>
 <div id="hud-preset">
   <button data-preset="theia" class="on"><span class="ic">🌙</span>theia</button>
   <button data-preset="headon"><span class="ic">💥</span>head-on</button>
@@ -130,6 +134,10 @@ var BLUR_PASSES = DEV.BLUR_PASSES, ANALYZE_EVERY = DEV.ANALYZE_EVERY, DEFAULT_N 
 var S = { q: 0.1, angle: 45, vfac: 1.05, spin0: 0.18, spin1: 0.20, nIdx: DEFAULT_N, rest: 0.3, core: 0.325, dens: 0.75,
           exposure: 1.0, glow: 1.0, shade: true, stars: true, follow: false, speed: 4, preset: 'theia' };
 var COL_TARGET = [0.40, 0.58, 0.90], COL_IMPACTOR = [0.96, 0.55, 0.28];
+// the palette, by w = layer + 4·body: core, mantle, crust for the target, then
+// the same three for the impactor — its core gold against Earth's silver
+var PALETTE = [[0.86, 0.86, 0.82], [0.60, 0.22, 0.17], COL_TARGET, [0, 0, 0],
+               [0.88, 0.72, 0.42], [0.58, 0.30, 0.14], COL_IMPACTOR, [0, 0, 0]];
 // the look of the heat and the film, in src/shell.js so every scenario page
 // wears the same one; __impact.look reaches this object
 var LOOK = CC.look, FOV = CC.FOV, glowCol = CC.glowCol;
@@ -140,7 +148,7 @@ var LOOK = CC.look, FOV = CC.FOV, glowCol = CC.glowCol;
 var SH = CC.glsl;
 var QUAD_VS = SH.QUAD_VS, SLOT_VS = SH.SLOT_VS, SLOT_FS = SH.SLOT_FS;
 var DEP_VS = SH.DEP_VS, DEP_FS = SH.DEP_FS, COARSE_FS = SH.COARSE_FS, MONO_FS = SH.MONO_FS, CELL_FS = SH.CELL_FS;
-var SIM_FS = SH.SIM_FS, RIGID_FS = SH.RIGID_FS, PERM_FS = SH.PERM_FS, DIAG_FS = SH.DIAG_FS;
+var SIM_FS = SH.simFS({ gravity: 'mesh' }), RIGID_FS = SH.RIGID_FS, PERM_FS = SH.PERM_FS, DIAG_FS = SH.DIAG_FS;
 var PPGATHER_FS = SH.PPGATHER_FS, PPFORCE_FS = SH.PPFORCE_FS;
 var STAR_CAT = SH.STAR_CAT, unb64 = SH.unb64, STAR_VS = SH.STAR_VS, STAR_FS = SH.STAR_FS;
 var G_VS = SH.G_VS, G_FS = SH.G_FS, BLUR_FS = SH.BLUR_FS, SHADE_FS = SH.SHADE_FS;
@@ -183,45 +191,15 @@ try {
 }
 vao = gl.createVertexArray();
 gl.bindVertexArray(vao);   // attribute-less drawing: every vertex is made from gl_VertexID
-// the catalogue into two attributes: direction (int16 ×3) and magnitude, colour (uint8 ×2)
-var STAR_COUNT = 0, starVao = gl.createVertexArray();
-(function () {
-  var raw = unb64(STAR_CAT);
-  STAR_COUNT = (raw.length / 6) | 0;
-  var dir = new Int16Array(STAR_COUNT * 3), mag = new Uint8Array(STAR_COUNT * 2);
-  for (var i = 0; i < STAR_COUNT; i++) {
-    var ra = (raw[i * 6] | (raw[i * 6 + 1] << 8)) / 65536 * 6.2831853;
-    var dv = (raw[i * 6 + 2] | (raw[i * 6 + 3] << 8));
-    if (dv > 32767) dv -= 65536;
-    var dec = dv / 32767 * 1.5707963, cd = Math.cos(dec);
-    dir[i * 3] = Math.round(cd * Math.cos(ra) * 32767);
-    dir[i * 3 + 1] = Math.round(Math.sin(dec) * 32767);
-    dir[i * 3 + 2] = Math.round(cd * Math.sin(ra) * 32767);
-    mag[i * 2] = raw[i * 6 + 4];
-    mag[i * 2 + 1] = raw[i * 6 + 5];
-  }
-  gl.bindVertexArray(starVao);
-  var b = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, b);
-  gl.bufferData(gl.ARRAY_BUFFER, dir, gl.STATIC_DRAW);
-  var loc = gl.getAttribLocation(starProg.p, 'aDir');
-  gl.enableVertexAttribArray(loc);
-  gl.vertexAttribPointer(loc, 3, gl.SHORT, true, 0, 0);
-  b = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, b);
-  gl.bufferData(gl.ARRAY_BUFFER, mag, gl.STATIC_DRAW);
-  loc = gl.getAttribLocation(starProg.p, 'aStar');
-  gl.enableVertexAttribArray(loc);
-  gl.vertexAttribPointer(loc, 2, gl.UNSIGNED_BYTE, true, 0, 0);
-  gl.bindVertexArray(vao);
-})();
+// the sky, from src/stars.js — the same catalogue on every scenario page
+var sky = SH.starSetup(gl, starProg, vao);
 
 // ---------- the picture ----------
 // src/view.js owns the screen-sized targets, the camera and render(); it is
 // handed the programs this page compiled and the sky it drew.
 var VIEW = CC.view;
-VIEW.init({ gl: gl, canvas: canvas, S: S, starVao: starVao, starCount: STAR_COUNT,
-            cols: [COL_TARGET, COL_IMPACTOR],
+VIEW.init({ gl: gl, canvas: canvas, S: S, starVao: sky.vao, starCount: sky.count,
+            pal: PALETTE,
             progs: { g: gProg, blur: blurProg, shade: shadeProg, sun: sunProg, bright: brightProg,
                      bloom: bloomProg, tone: toneProg, fxaa: fxaaProg, star: starProg } });
 var render = VIEW.render, resize = VIEW.resize, governQuality = VIEW.governQuality, cam = VIEW.cam;

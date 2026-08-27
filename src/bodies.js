@@ -87,14 +87,21 @@ function ball(n, s, a, rng, e) {
 // spheroid on the way: at a free surface the only way out of an overlap is
 // outward, and a particle that takes it stands proud of the skin as a pimple
 // — held in, the crowd goes sideways instead and the surface stays a surface.
+//
+// A body is held in by its own spheroid; a patch of ground is held in by
+// something else — its walls, and the flat sky over it — so a caller with a
+// different shape to keep can pass confine(out, x, y, z) and put the particle
+// back itself. Sweeps too: a lattice jittered hard enough to lose its rows
+// needs more of them than a spiral that was nearly right to begin with.
 var RELAX_SWEEPS = 10, RELAX_TARGET = 0.96, RELAX_REGRID = 4;
-function relax(p, n, a, A, C) {
+function relax(p, n, a, A, C, confine, sweeps) {
   var D = 2 * a * RELAX_TARGET, cs = 2.2 * a, i, j, k, o, q, iA2 = 1 / (A * A), iC2 = 1 / (C * C);
+  var nSweeps = sweeps || RELAX_SWEEPS, held = confine ? [0, 0, 0] : null;
   var lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
   for (i = 0; i < n; i++) for (k = 0; k < 3; k++) { var v = p[i * 3 + k]; if (v < lo[k]) lo[k] = v; if (v > hi[k]) hi[k] = v; }
   var gx = Math.floor((hi[0] - lo[0]) / cs) + 3, gy = Math.floor((hi[1] - lo[1]) / cs) + 3, gz = Math.floor((hi[2] - lo[2]) / cs) + 3, nc = gx * gy * gz;
   var start = new Int32Array(nc + 1), order = new Int32Array(n), cell = new Int32Array(n), worst = 0, sweep;
-  for (sweep = 0; sweep < RELAX_SWEEPS; sweep++) {
+  for (sweep = 0; sweep < nSweeps; sweep++) {
     if (sweep % RELAX_REGRID === 0) {                        // the pile barely moves: the grid keeps for a few sweeps
       start.fill(0);
       for (i = 0; i < n; i++) {
@@ -127,8 +134,11 @@ function relax(p, n, a, A, C) {
           p[j * 3] += dx; p[j * 3 + 1] += dy; p[j * 3 + 2] += dz;
         }
       }
-      var qq = (x * x + z * z) * iA2 + y * y * iC2;
-      if (qq > 1.0) { var f = 1 / Math.sqrt(qq); x *= f; y *= f; z *= f; }
+      if (held) { confine(held, x, y, z); x = held[0]; y = held[1]; z = held[2]; }
+      else {
+        var qq = (x * x + z * z) * iA2 + y * y * iC2;
+        if (qq > 1.0) { var f = 1 / Math.sqrt(qq); x *= f; y *= f; z *= f; }
+      }
       p[i * 3] = x; p[i * 3 + 1] = y; p[i * 3 + 2] = z;
     }
   }

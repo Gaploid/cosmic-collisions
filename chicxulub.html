@@ -1,0 +1,922 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#04060a">
+<meta name="description" content="The Chicxulub impact, simulated: a 14 km asteroid opens a 90 km bowl in the Yucatán platform in eighty seconds, and the ejecta curtain goes up.">
+<meta property="og:title" content="Chicxulub — Cosmic Collisions">
+<meta property="og:description" content="The impact that ended the Cretaceous, dug in your browser.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>&#x2604;</text></svg>">
+<title>Chicxulub — Cosmic Collisions</title>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-M1GPXGSXSN"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-M1GPXGSXSN');
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="src/hud.css">
+</head>
+<body>
+<canvas id="stage"></canvas>
+<div id="hud-layer">
+<div class="hud" id="hud-title"><strong>Chicxulub</strong><span id="hud-sub">initializing…</span></div>
+<div class="hud" id="hud-corner"><a id="hud-back" href="https://gaploid.github.io/stardust/">stardust ↗</a><a id="hud-src" class="iconbtn" href="https://github.com/Gaploid/cosmic-collisions" target="_blank" rel="noopener" aria-label="source on GitHub" title="source on GitHub"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></a></div>
+<div class="hud" id="hud-controls">
+<div id="hud-scene">
+  <a href="index.html"><span class="ic">🌙</span>giant impact</a>
+  <a class="on" href="chicxulub.html"><span class="ic">☄️</span>Chicxulub</a>
+</div>
+<div id="hud-preset">
+  <button data-preset="chicxulub" class="on"><span class="ic">☄️</span>chicxulub</button>
+  <button data-preset="vertical"><span class="ic">⬇️</span>vertical</button>
+  <button data-preset="grazing"><span class="ic">↘️</span>grazing</button>
+  <button data-preset="small"><span class="ic">🪨</span>1 km</button>
+  <button data-preset="big"><span class="ic">💀</span>30 km</button>
+</div>
+<div id="hud-run">
+  <button id="btn-pause" class="iconbtn" aria-label="pause" title="pause — space"><svg viewBox="0 0 14 14" aria-hidden="true"><rect class="i-pause" x="3" y="2" width="2.8" height="10" rx="0.4"/><rect class="i-pause" x="8.2" y="2" width="2.8" height="10" rx="0.4"/><path class="i-play" d="M3.6 2 L11.4 7 L3.6 12 Z"/></svg></button>
+  <button id="btn-restart" class="iconbtn" aria-label="restart" title="restart — r"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M11.2 4.2A5 5 0 1 1 7 2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M7 0.2 L7 3.8 L10.2 2 Z"/></svg></button>
+  <span class="sep">·</span>
+  <button data-speed="1">¼×</button>
+  <button data-speed="2">½×</button>
+  <button data-speed="4" class="on">1×</button>
+  <button data-speed="8">2×</button>
+  <button data-speed="16">4×</button>
+</div>
+<div id="hud-adv">
+  <button id="adv-toggle"><span class="ic">⚙️</span>advanced</button>
+  <div id="adv-panel" hidden>
+    <label>impactor km <input type="range" id="set-imp" min="1" max="30" step="0.5" value="14"><span id="val-imp">14</span></label>
+    <label>speed km/s <input type="range" id="set-vimp" min="11" max="72" step="1" value="20"><span id="val-vimp">20</span></label>
+    <label>angle ° <input type="range" id="set-angle" min="15" max="90" step="5" value="60"><span id="val-angle">60</span></label>
+    <label>sediment km <input type="range" id="set-sed" min="0" max="8" step="0.5" value="3"><span id="val-sed">3.0</span></label>
+    <label>target ρ <input type="range" id="set-dens" min="1800" max="3200" step="50" value="2500"><span id="val-dens">2500</span></label>
+    <label>particles <input type="range" id="set-n" min="0" max="4" step="1" value="3"><span id="val-n">131k</span></label>
+    <label>bounce <input type="range" id="set-rest" min="0.05" max="0.9" step="0.05" value="0.25"><span id="val-rest">0.25</span></label>
+    <div class="note">above restarts the run</div>
+    <label>exposure <input type="range" id="set-exp" min="0.2" max="4" step="0.1" value="1"><span id="val-exp">1.0</span></label>
+    <label>glow <input type="range" id="set-glow" min="0" max="3" step="0.1" value="1"><span id="val-glow">1.0</span></label>
+    <label>shading <input type="checkbox" id="set-shade" checked><span id="val-shade">on</span></label>
+    <label>stars <input type="checkbox" id="set-stars" checked><span id="val-stars">on</span></label>
+  </div>
+</div>
+</div>
+<div class="hud" id="hud-report" hidden></div>
+<div class="hud" id="hud-help">drag — rotate &nbsp;·&nbsp; wheel — zoom &nbsp;·&nbsp; space — pause &nbsp;·&nbsp; r — restart</div>
+<div class="hud" id="hud-stat"><strong id="hud-clock">T− 0m 00s</strong><span id="hud-fps"></span></div>
+</div>
+<div id="fallback">WebGL 2 is not available in this browser —<br>the simulation cannot run.</div>
+<!-- The engine, shared with the other scenario pages. Plain scripts in
+     dependency order — no modules, so the page still opens from disk. -->
+<script src="src/shell.js"></script>
+<script src="src/math.js"></script>
+<script src="src/bodies.js"></script>
+<script src="src/glsl-common.js"></script>
+<script src="src/glsl-sim.js"></script>
+<script src="src/glsl-draw.js"></script>
+<script src="src/stars.js"></script>
+<script src="src/gl.js"></script>
+<script src="src/view.js"></script>
+<script>
+(function () {
+'use strict';
+var $ = CC.$, fail = CC.fail;
+var boot = CC.boot();
+if (!boot) return;
+var canvas = boot.canvas, gl = boot.gl;
+
+// ---------- units ----------
+// A patch of ground, not a planet: 10 km is the length, 10 s the time, so the
+// speed unit is 1 km/s and gravity is 0.0981 down. Mass is the target rock's
+// own density over a length unit cubed, so a density of 1 is the target's.
+// Then the transient crater is 9 units across, the impactor arrives at 20,
+// and it opens in 8 — everything the renderer and the contact grid want.
+var L_UNIT = 1e4, T_UNIT = 10, V_UNIT = 1000;      // metres, seconds, m/s
+var G_EARTH = 9.81;
+var E_KG = V_UNIT * V_UNIT;                        // J/kg per unit of specific energy
+var CP_ROCK = 1200;                                // J/kg·K, shocked silicate
+var MT_TNT = 4.184e15;                             // joules in a megatonne
+var JAM = 0.96;                                    // see the note in src/bodies.js
+var N_CHOICES = CC.N_CHOICES, N_LABELS = CC.N_LABELS, SLOTS = CC.SLOTS;
+
+// The box is a cylinder of ground with its floor and its wall held still,
+// since the rest of the world is not in it — and it is cut to the crater
+// rather than to a fixed size, because a kilometre of rock and thirty make
+// holes that differ by a factor of twenty. Everything is in transient radii:
+// wide enough for the crater and most of the blanket it throws, deep enough
+// that the floor is well under the displaced rock, and with a frozen shell
+// thick enough to anchor. The same particle count then always resolves the
+// crater to the same degree, whatever hit it.
+var BOX_R = 2.85, BOX_D = 1.55, BOX_FROZEN = 0.26, CAM_R = 8.3;
+var MAT_FROZEN = 0, MAT_BASEMENT = 1, MAT_PLATFORM = 2, MAT_MELT = 3, MAT_IMPACTOR = 4;
+
+// The target at ground zero, from the Chicxulub drill cores (Gulick et al.
+// 2013; IODP-ICDP Expedition 364): about 3 km of carbonate platform —
+// dolomite, limestone and, at a quarter to a third of it, the anhydrite that
+// carried the sulfur — over crystalline basement. Three kilometres is one
+// particle deep at this resolution, so the platform is a layer the run can
+// label and weigh but not resolve, and the anhydrite inside it not even that.
+// How much of its sulfur reached the stratosphere is a question about how a
+// vapour plume expands, which wants a hydrocode; the readout quotes the two
+// published ends of it and says whose they are rather than inventing a third.
+
+var PRESETS = {
+  chicxulub: { imp: 14, vimp: 20, angle: 60, label: 'chicxulub' },   // Collins et al. 2020: 45–60°, from the north-east
+  vertical:  { imp: 14, vimp: 20, angle: 90, label: 'vertical' },
+  grazing:   { imp: 14, vimp: 20, angle: 30, label: 'grazing' },
+  small:     { imp: 1,  vimp: 20, angle: 60, label: '1 km' },       // a crater the size of Ries, for scale
+  big:       { imp: 30, vimp: 20, angle: 60, label: '30 km' }
+};
+
+var DEV = CC.dev;
+var ANALYZE_EVERY = DEV.ANALYZE_EVERY, DEFAULT_N = DEV.DEFAULT_N;
+
+var S = { imp: 14, vimp: 20, angle: 60, sed: 3, dens: 2500, nIdx: DEFAULT_N, rest: 0.25,
+          exposure: 1.0, glow: 1.0, shade: true, stars: true, speed: 4, preset: 'chicxulub' };
+
+// basement a granite grey-pink, the platform the pale carbonate above it, the
+// melt the target rock the coupling took, the impactor a dark carbonaceous
+// chondrite — and the frozen shell a slate that reads as "not part of this"
+var PALETTE = [[0.13, 0.15, 0.18], [0.44, 0.39, 0.36], [0.80, 0.76, 0.66],
+               [0.32, 0.24, 0.19], [0.19, 0.17, 0.16], [0, 0, 0], [0, 0, 0], [0, 0, 0]];
+
+var LOOK = CC.look, FOV = CC.FOV;
+
+// ---------- the scaling laws ----------
+// The sim carries the excavation flow and lets gravity close the hole; how big
+// the hole is at the end of the excavation is not something a contact model
+// without shocks can tell you, so it comes from where it is known. All SI.
+//
+// Collins, Melosh & Marcus 2005, Earth Impact Effects Program, Meteoritics &
+// Planetary Science 40, 817 — the gravity-regime transient crater:
+function transientCrater(L, v, rhoI, rhoT, g, thetaDeg) {
+  return 1.161 * Math.pow(rhoI / rhoT, 1 / 3) * Math.pow(L, 0.78) * Math.pow(v, 0.44) *
+         Math.pow(g, -0.22) * Math.pow(Math.sin(thetaDeg * Math.PI / 180), 1 / 3);
+}
+// and what it collapses to, past the 3.2 km where Earth's craters stop being
+// simple bowls and start growing terraces and a peak ring
+var D_SIMPLE = 3200;
+function finalCrater(Dtc) {
+  return Dtc < D_SIMPLE ? 1.25 * Dtc : 1.17 * Math.pow(Dtc, 1.13) / Math.pow(D_SIMPLE, 0.13);
+}
+// Schultz & Gault's magnitude for the seismic energy an impact radiates
+function seismicMagnitude(E) { return 0.67 * Math.log10(E) - 5.87; }
+
+// Housen & Holsapple 2011 set the speed material leaves with at a given range;
+// Maxwell's Z-model (Melosh 1989, §5.4) sets the direction. Together they are
+// the excavation flow the coupling deposits.
+var HH_C1 = 0.55, HH_MU = 0.55, HH_P = 0.3, Z_MODEL = 2.7;
+
+// ---------- shaders ----------
+var SH = CC.glsl;
+var QUAD_VS = SH.QUAD_VS, SLOT_VS = SH.SLOT_VS, SLOT_FS = SH.SLOT_FS;
+var SIM_FS = SH.simFS({ gravity: 'field', frozen: true });
+var RIGID_FS = SH.RIGID_FS;
+var STAR_VS = SH.STAR_VS, STAR_FS = SH.STAR_FS;
+var G_VS = SH.G_VS, G_FS = SH.G_FS, BLUR_FS = SH.BLUR_FS, SHADE_FS = SH.SHADE_FS;
+var BRIGHT_FS = SH.BRIGHT_FS, BLOOM_FS = SH.BLOOM_FS, SUN_FS = SH.SUN_FS, TONE_FS = SH.TONE_FS, FXAA_FS = SH.FXAA_FS;
+
+// The coupling, in one pass, on the step the impactor touches down.
+//
+// A contact model has no shock and no vapour, so it cannot be asked what a
+// 20 km/s impact does in its first second. What is known is what comes out of
+// that second: an excavation flow, radial from a point source buried at the
+// end of the projectile's path, whose speed at a given range is Housen &
+// Holsapple's and whose direction is Maxwell's Z-model — up and out at about
+// 35° where it reaches the surface. The flow stalls at the transient radius
+// the π-scaling gives, so the hole the sim then digs is the right size by
+// construction, and everything after — the curtain, the blanket, the rim,
+// the collapse — the sim does itself.
+//
+// The impactor's own particles are not tracked through the shock either. They
+// become melt, at the temperature its kinetic energy makes.
+var COUPLE_FS = [
+  '#version 300 es',
+  'precision highp float;',
+  'precision highp sampler2D;',
+  'uniform sampler2D uPos;',
+  'uniform sampler2D uVel;',
+  'uniform sampler2D uAux;',
+  'uniform sampler2D uMat;',
+  'uniform vec3 uCentre;',        // the point source, at the end of the penetration path
+  'uniform float uVimp;',         // the impact speed
+  'uniform float uAimp;',         // the impactor radius: the scaling is in units of it
+  'uniform float uC1;',
+  'uniform float uInvMu;',        // 1/μ
+  'uniform float uPexp;',
+  'uniform float uStall;',        // where the flow goes to nothing: the transient radius
+  'uniform float uZ;',
+  'uniform float uHeat;',         // kelvins per unit of v²/2
+  'uniform float uTk;',
+  'uniform float uFrozen;',
+  'uniform float uAmbient;',
+  'layout(location = 0) out vec4 oPos;',
+  'layout(location = 1) out vec4 oVel;',
+  'layout(location = 2) out vec4 oAux;',
+  'layout(location = 3) out vec4 oQ;',
+  'void main() {',
+  '  ivec2 me = ivec2(gl_FragCoord.xy);',
+  '  vec4 P = texelFetch(uPos, me, 0);',
+  '  vec4 V = texelFetch(uVel, me, 0);',
+  '  float w = P.w, ri = texelFetch(uMat, me, 0).r;',
+  '  oPos = P;',
+  '  oAux = texelFetch(uAux, me, 0);',
+  '  if (abs(w - uFrozen) < 0.5) { oVel = vec4(0.0, 0.0, 0.0, uAmbient); oQ = vec4(0.0); return; }',
+  '  vec3 R = P.xyz - uCentre;',
+  '  float r = max(length(R), 1e-4);',
+  // the speed: Housen & Holsapple's power law, capped at the impact speed
+  // inside the isobaric core, and taken to nothing at the transient radius
+  '  float v = uC1 * uVimp * pow(r / uAimp, -uInvMu);',
+  '  v = min(v, uVimp);',
+  '  v *= pow(max(0.0, 1.0 - r / uStall), uPexp);',
+  // the direction: the Z-model about the downward axis through the source.
+  // ê_θ = (cosθ·n − a)/sinθ with a straight down, and u_θ/u_r = (Z−2)tan(θ/2)
+  '  vec3 n = R / r;',
+  '  vec3 axis = vec3(0.0, -1.0, 0.0);',
+  '  float ct = clamp(dot(n, axis), -1.0, 1.0);',
+  '  float st = sqrt(max(1.0 - ct * ct, 1e-8));',
+  '  vec3 eth = (ct * n - axis) / st;',
+  '  float th = acos(ct);',
+  '  vec3 dir = normalize(n + (uZ - 2.0) * tan(0.5 * th) * eth);',
+  // what the impactor was is melt now, and carries its own speed as well
+  '  bool imp = w > 3.5;',
+  '  vec3 vel = dir * v;',
+  '  if (imp) vel = mix(vel, V.xyz, 0.5);',
+  '  float speed = length(vel);',
+  '  float T = uAmbient + uHeat * 0.5 * speed * speed;',
+  '  oVel = vec4(vel, T);',
+  '  oQ = vec4(T * ri / max(uTk, 1e-9), 0.0, 0.0, 0.0);',
+  // target rock the flow took is melt too, once it is hot enough to be
+  '  float mat = imp ? ' + MAT_MELT + '.0 : (T > 1500.0 ? ' + MAT_MELT + '.0 : w);',
+  '  oPos = vec4(P.xyz, mat);',
+  '}'
+].join('\n');
+
+// ---------- GL ----------
+var GLH = CC.gl;
+GLH.init(boot);
+var program = GLH.program, floatTex = GLH.floatTex;
+var simTarget = GLH.simTarget, freeTarget = GLH.freeTarget, fboFor = GLH.fboFor;
+var makeGrid = GLH.makeGrid, freeGrid = GLH.freeGrid;
+var vao = GLH.vao;
+
+var simProg, slotProg, rigidProg, coupleProg;
+var starProg, gProg, blurProg, shadeProg, sunProg, brightProg, bloomProg, toneProg, fxaaProg;
+try {
+  simProg = program(QUAD_VS, SIM_FS);
+  slotProg = program(SLOT_VS, SLOT_FS);
+  rigidProg = program(QUAD_VS, RIGID_FS);
+  coupleProg = program(QUAD_VS, COUPLE_FS);
+  starProg = program(STAR_VS, STAR_FS);
+  gProg = program(G_VS, G_FS);
+  blurProg = program(QUAD_VS, BLUR_FS);
+  shadeProg = program(QUAD_VS, SHADE_FS);
+  brightProg = program(QUAD_VS, BRIGHT_FS);
+  bloomProg = program(QUAD_VS, BLOOM_FS);
+  toneProg = program(QUAD_VS, TONE_FS);
+  sunProg = program(QUAD_VS, SUN_FS);
+  fxaaProg = program(QUAD_VS, FXAA_FS);
+} catch (e) {
+  fail('The simulation shaders failed to compile on this GPU.<br>' + String(e.message || e).slice(0, 200));
+  return;
+}
+var dummy = floatTex(1, 1, new Float32Array([-1, 0, 0, 0]));   // "no particle", for slot samplers not yet filled
+var sky = SH.starSetup(gl, starProg, vao);
+
+var VIEW = CC.view;
+VIEW.init({ gl: gl, canvas: canvas, S: S, starVao: sky.vao, starCount: sky.count,
+            pal: PALETTE,
+            progs: { g: gProg, blur: blurProg, shade: shadeProg, sun: sunProg, bright: brightProg,
+                     bloom: bloomProg, tone: toneProg, fxaa: fxaaProg, star: starProg } });
+var render = VIEW.render, resize = VIEW.resize, governQuality = VIEW.governQuality, cam = VIEW.cam;
+
+var MATH = CC.math, BODIES = CC.bodies;
+var mulberry = MATH.mulberry, ball = BODIES.ball;
+
+var grid = null;
+var sim = null, report = null;
+var stepAcc = 0;
+var run = CC.run;
+
+// ---------- building a run ----------
+// The ground starts as a face-centred cubic lattice, which cut to a cylinder
+// has the flat top a ground surface wants — but a lattice left alone reads as
+// a lattice: its rows survive the skin and the ground draws as a bead grid.
+// So it is jittered by a third of its own spacing, which puts the particles
+// well inside each other, and then relaxed until they are not. What comes out
+// is a random close pack with a flat top, which is what fractured rock under
+// its own weight is. The spacing is searched for rather than solved, since the
+// count of lattice sites inside a cylinder is not a formula.
+function latticeFill(nWant, R, D, rng) {
+  var s = Math.cbrt(4 * Math.PI * R * R * D / nWant), pts = null;
+  for (var attempt = 0; attempt < 8; attempt++) {
+    pts = [];
+    var h = s * 0.5, R2 = R * R, nx = Math.ceil(R / h);
+    for (var i = -nx; i <= nx; i++) for (var k = -nx; k <= nx; k++) {
+      var x = i * h, z = k * h;
+      if (x * x + z * z > R2) continue;
+      for (var j = 0; j * h <= D; j++) {
+        if (((i + j + k) & 1) !== 0) continue;      // face-centred: only the even sites
+        pts.push(x, -j * h, z);
+      }
+    }
+    if (pts.length / 3 >= nWant) break;
+    s *= Math.pow(pts.length / 3 / nWant, 1 / 3) * 0.99;
+  }
+  var have = pts.length / 3;
+  // more sites than particles: drop at random rather than off the end, so the
+  // vacancies are spread through the rock instead of taken out of one face
+  var keep = new Int32Array(have);
+  for (var q = 0; q < have; q++) keep[q] = q;
+  for (q = have - 1; q > 0; q--) { var t = (rng() * (q + 1)) | 0, tmp = keep[q]; keep[q] = keep[t]; keep[t] = tmp; }
+  var out = new Float32Array(nWant * 3), jit = 0.34 * s;
+  for (q = 0; q < nWant; q++) {
+    var o = keep[q] * 3;
+    out[q * 3] = pts[o] + (rng() - 0.5) * jit;
+    out[q * 3 + 1] = pts[o + 1] + (rng() - 0.5) * jit;
+    out[q * 3 + 2] = pts[o + 2] + (rng() - 0.5) * jit;
+  }
+  // the walls, the floor, and the flat sky: nothing may leave the box on its
+  // way out of an overlap, or the ground grows pimples
+  var a = JAM * s / (2 * Math.SQRT2), R2 = R * R;
+  BODIES.relax(out, nWant, a, R, D, function (held, x, y, z) {
+    var q2 = x * x + z * z;
+    if (q2 > R2) { var f = R / Math.sqrt(q2); x *= f; z *= f; }
+    held[0] = x; held[1] = Math.max(Math.min(y, 0), -D); held[2] = z;
+  }, 16);
+  return { p: out, s: s, a: a };
+}
+
+var gen = 0, framedAt = 0;
+function build() {
+  var N = N_CHOICES[S.nIdx];
+  var W = N >= 131072 ? 512 : N >= 32768 ? 256 : 128, H = N / W;
+  var rng = mulberry(20260827);
+
+  var rhoT = S.dens, rhoI = 2630;                  // kg/m³ — the target's, and a carbonaceous chondrite's
+  var dImp = S.imp * 1000 / L_UNIT;                // the impactor, in length units
+  var aImp = dImp * 0.5;
+  var vImp = S.vimp * 1000 / V_UNIT;
+  var theta = S.angle;
+
+  // what the scaling says this impact makes, in metres — and then the box,
+  // which is cut to it
+  var Ltc = transientCrater(S.imp * 1000, S.vimp * 1000, rhoI, rhoT, G_EARTH, theta);
+  var Rtc = 0.5 * Ltc / L_UNIT;                    // the transient radius, in length units
+  var Rbox = BOX_R * Rtc, Dbox = BOX_D * Rtc, froz = BOX_FROZEN * Rtc;
+
+  // how many particles the impactor is worth at the target's own spacing
+  var vBox = Math.PI * Rbox * Rbox * Dbox;
+  var vImpactor = 4 / 3 * Math.PI * aImp * aImp * aImp * (rhoI / rhoT);
+  var n2 = Math.max(1, Math.min(Math.round(N * vImpactor / (vBox + vImpactor)), Math.floor(N / 4)));
+  var n1 = N - n2;
+
+  var lat = latticeFill(n1, Rbox, Dbox, rng);
+  var s = lat.s;
+  var a = JAM * s / (2 * Math.SQRT2);              // the particle radius the spacing asks for
+  var b2 = ball(n2, s, a, rng, 0);                 // the impactor, at the same spacing
+
+  var pos = new Float32Array(N * 4), vel = new Float32Array(N * 4);
+  var matR = new Float32Array(N);
+  var sedTop = -S.sed * 1000 / L_UNIT;
+  var i, o;
+  var wallR = Rbox - froz, floorY = -(Dbox - froz);
+  for (i = 0; i < n1; i++) {
+    var x = lat.p[i * 3], y = lat.p[i * 3 + 1], z = lat.p[i * 3 + 2];
+    var mat = (x * x + z * z > wallR * wallR || y < floorY) ? MAT_FROZEN
+            : (y > sedTop ? MAT_PLATFORM : MAT_BASEMENT);
+    o = i * 4;
+    pos[o] = x; pos[o + 1] = y; pos[o + 2] = z; pos[o + 3] = mat;
+    matR[i] = 1;
+  }
+
+  // the impactor, on its way in: down the trajectory, far enough out that the
+  // approach reads as an approach
+  var th = theta * Math.PI / 180;
+  var dir = [-Math.cos(th) * Math.SQRT1_2, -Math.sin(th), -Math.cos(th) * Math.SQRT1_2];   // from the north-east, going down
+  var dl = Math.hypot(dir[0], dir[1], dir[2]);
+  dir = [dir[0] / dl, dir[1] / dl, dir[2] / dl];
+  var standoff = Math.max(6, 2.2 * dImp + 4);
+  var c2 = [-dir[0] * standoff, -dir[1] * standoff + aImp, -dir[2] * standoff];
+  for (i = 0; i < n2; i++) {
+    o = (n1 + i) * 4;
+    pos[o] = b2[i * 3] + c2[0]; pos[o + 1] = b2[i * 3 + 1] + c2[1]; pos[o + 2] = b2[i * 3 + 2] + c2[2];
+    pos[o + 3] = MAT_IMPACTOR;
+    matR[n1 + i] = rhoI / rhoT;
+    vel[o] = dir[0] * vImp; vel[o + 1] = dir[1] * vImp; vel[o + 2] = dir[2] * vImp;
+  }
+
+  // the mass a particle stands for, in kilograms, from the box it fills
+  var mref = vBox / n1 * L_UNIT * L_UNIT * L_UNIT * rhoT;
+
+  // the contact spring is sized for what moves after the coupling — a few
+  // km/s — not for the 20 the impactor arrives at, which it never resolves
+  var vref = Math.max(2.5, 0.25 * vImp);
+  var k = 4 * vref * vref / (a * a);
+  var dt = 0.35 / Math.sqrt(2 * k / Math.min(1, rhoI / rhoT));
+  var lnE = Math.log(S.rest), zeta = -lnE / Math.sqrt(Math.PI * Math.PI + lnE * lnE);
+  var cd = 2 * zeta * Math.sqrt(k / 2);
+
+  var mImp = Math.PI / 6 * Math.pow(S.imp * 1000, 3) * rhoI;
+  var energy = 0.5 * mImp * Math.pow(S.vimp * 1000, 2);
+
+  if (sim) { freeTarget(sim.src); freeTarget(sim.dst); gl.deleteTexture(sim.mat); }
+  var G = N >= 65536 ? 128 : 64;
+  if (!grid || grid.G !== G) { freeGrid(grid); grid = makeGrid(G); }
+  var settle = Math.ceil(0.5 / dt);
+  sim = {
+    N: N, W: W, H: H, n1: n1, n2: n2, m: mref, a: a, cell: 2.6 * a, dt: dt, k: k, c: cd,
+    creep: 0.10, damp: Math.exp(-dt * 12),
+    src: simTarget(W, H, pos, vel), dst: simTarget(W, H, null, null),
+    mat: floatTex(W, H, matR, gl.R32F, gl.FLOAT, gl.RED), matR: matR,
+    t: -standoff / vImp, phase: 'settle', settleLeft: settle, settleTotal: settle,
+    stepNo: 0, gen: ++gen,
+    // kelvins per unit of heat in a particle of target rock
+    tK: 0.5 * E_KG / CP_ROCK,
+    kappa: 0.3,
+    // the impactor and where it is going
+    dir: dir, vImp: vImp, aImp: aImp, dImp: dImp, cen2: c2, standoff: standoff,
+    // the numbers that do not come out of the sim
+    Dtc: Ltc / L_UNIT, DtcM: Ltc, Dfr: finalCrater(Ltc), energy: energy, mImp: mImp,
+    Mw: seismicMagnitude(energy), rhoT: rhoT, rhoI: rhoI, theta: theta,
+    sedTop: sedTop, impactT: 0, Rbox: Rbox, Dbox: Dbox, Rtc: Rtc
+  };
+  setStaticUniforms();
+  CC.setSim(sim);
+  // frame the crater, but leave a view the viewer has set alone: only a
+  // materially different hole is worth taking the camera back off them
+  VIEW.clampDist(0.35 * Rtc, 40 * Rtc);
+  if (!framedAt || Math.abs(Math.log(Rtc / framedAt)) > 0.1) { cam.dist = CAM_R * Rtc; framedAt = Rtc; }
+  report = null; CC.setReport(null); stepAcc = 0; run.paused = false;
+  $('btn-pause').classList.remove('paused');
+  $('hud-report').hidden = true; lastReport = '';
+}
+
+function setStaticUniforms() {
+  var g = grid, u, s;
+  u = slotProg.u; gl.useProgram(slotProg.p);
+  gl.uniform1i(u.uPos, 0);
+  for (s = 0; s < SLOTS; s++) gl.uniform1i(u['uS' + s], 1 + s);
+  gl.uniform2i(u.uSize, sim.W, sim.H);
+  gl.uniform1f(u.uInvCell, 1 / sim.cell);
+  gl.uniform1i(u.uGMask, g.G - 1); gl.uniform1i(u.uGShift, g.GShift);
+  gl.uniform1i(u.uSXMask, g.SX - 1); gl.uniform1i(u.uSXShift, g.SXShift);
+  gl.uniform2f(u.uAtlas, g.AW, g.AH);
+  gl.uniform1f(u.uInvN, 1 / sim.N);
+
+  u = simProg.u; gl.useProgram(simProg.p);
+  gl.uniform1i(u.uPos, 0); gl.uniform1i(u.uVel, 1); gl.uniform1i(u.uMat, 12); gl.uniform1i(u.uQ, 13);
+  for (s = 0; s < SLOTS; s++) gl.uniform1i(u['uS' + s], 4 + s);
+  gl.uniform2i(u.uSize, sim.W, sim.H);
+  gl.uniform1f(u.uInvCell, 1 / sim.cell);
+  gl.uniform1f(u.uCell, sim.cell);
+  gl.uniform1i(u.uGMask, g.G - 1); gl.uniform1i(u.uGShift, g.GShift);
+  gl.uniform1i(u.uSXMask, g.SX - 1); gl.uniform1i(u.uSXShift, g.SXShift);
+  gl.uniform1f(u.uDt, sim.dt);
+  gl.uniform1f(u.uTouch, 2 * sim.a);
+  gl.uniform1f(u.uLink2, sim.cell * sim.cell);
+  gl.uniform1f(u.uK, sim.k);
+  gl.uniform1f(u.uC, sim.c);
+  gl.uniform1f(u.uInvM, 1);
+  gl.uniform1f(u.uDamp, sim.damp);
+  gl.uniform1f(u.uCreep, sim.creep);
+  gl.uniform1f(u.uTk, sim.tK);
+  gl.uniform1f(u.uKappa, sim.kappa);
+  gl.uniform1f(u.uCpIron, 1);                       // no iron here: every material is rock
+  gl.uniform1f(u.uFrozen, MAT_FROZEN);
+  gl.uniform3f(u.uGField, 0, -G_EARTH * T_UNIT * T_UNIT / L_UNIT, 0);
+  gl.uniform3f(u.uSpin0, 0, 0, 0); gl.uniform3f(u.uSpin1, 0, 0, 0);
+  gl.uniform3f(u.uCen0, 0, 0, 0); gl.uniform3f(u.uCen1, 0, 0, 0);
+
+  u = rigidProg.u; gl.useProgram(rigidProg.p);
+  gl.uniform1i(u.uPos, 0); gl.uniform1i(u.uVel, 1); gl.uniform1i(u.uAux, 2); gl.uniform1i(u.uQ, 3);
+  gl.uniform3f(u.uSpin0, 0, 0, 0); gl.uniform3f(u.uSpin1, 0, 0, 0);
+  gl.uniformMatrix3fv(u.uRot0, false, [1, 0, 0, 0, 1, 0, 0, 0, 1]);
+  gl.uniformMatrix3fv(u.uRot1, false, [1, 0, 0, 0, 1, 0, 0, 0, 1]);
+  gl.uniform3f(u.uCen0, 0, 0, 0); gl.uniform3f(u.uCen1, 0, 0, 0);
+  gl.uniform3f(u.uBulk0, 0, 0, 0);
+
+  u = coupleProg.u; gl.useProgram(coupleProg.p);
+  gl.uniform1i(u.uPos, 0); gl.uniform1i(u.uVel, 1); gl.uniform1i(u.uAux, 2); gl.uniform1i(u.uMat, 3);
+  gl.uniform1f(u.uC1, HH_C1); gl.uniform1f(u.uInvMu, 1 / HH_MU); gl.uniform1f(u.uPexp, HH_P);
+  gl.uniform1f(u.uZ, Z_MODEL);
+  gl.uniform1f(u.uTk, sim.tK);
+  gl.uniform1f(u.uFrozen, MAT_FROZEN);
+  gl.uniform1f(u.uAmbient, 300);
+  gl.uniform1f(u.uHeat, E_KG / CP_ROCK);
+}
+
+// ---------- the passes ----------
+function passSlots() {
+  var g = grid, s, k;
+  gl.useProgram(slotProg.p);
+  gl.viewport(0, 0, g.AW, g.AH);
+  gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sim.src.pos);
+  gl.clearColor(-1, 0, 0, 0);
+  for (k = 0; k < SLOTS; k++) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, g.fbo[k]);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    for (s = 0; s < SLOTS; s++) { gl.activeTexture(gl.TEXTURE1 + s); gl.bindTexture(gl.TEXTURE_2D, s < k ? g.slot[s] : dummy); }
+    gl.uniform1i(slotProg.u.uK, k);
+    gl.drawArrays(gl.POINTS, 0, sim.N);
+  }
+  gl.disable(gl.DEPTH_TEST); gl.depthMask(false);
+}
+
+function passSim(settle, gdt) {
+  var g = grid, u = simProg.u, s;
+  gl.useProgram(simProg.p);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, sim.dst.fbo);
+  gl.viewport(0, 0, sim.W, sim.H);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sim.src.pos);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, sim.src.vel);
+  for (s = 0; s < SLOTS; s++) { gl.activeTexture(gl.TEXTURE4 + s); gl.bindTexture(gl.TEXTURE_2D, g.slot[s]); }
+  gl.activeTexture(gl.TEXTURE12); gl.bindTexture(gl.TEXTURE_2D, sim.mat);
+  gl.activeTexture(gl.TEXTURE13); gl.bindTexture(gl.TEXTURE_2D, sim.src.q);
+  gl.uniform1f(u.uSettle, settle ? 1 : 0);
+  gl.uniform1f(u.uKick, 0);
+  gl.uniform1f(u.uGDt, gdt);
+  gl.uniform3f(u.uBulk0, 0, 0, 0); gl.uniform3f(u.uBulk1, 0, 0, 0);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  var t = sim.src; sim.src = sim.dst; sim.dst = t;
+}
+
+// Gravity is a constant here, so it needs no mesh and no schedule — the giant
+// impact hands its mesh over every eighth step because building one costs
+// something; a field costs nothing and is handed over on every step it acts.
+// The contact cells still keep for two: a particle moves under a fifth of a
+// radius in a step, and the search radius has more than that to spare.
+function step(settle) {
+  if (sim.stepNo++ % 2 === 0) passSlots();
+  passSim(settle, sim.dt);
+}
+
+function settleSome(n) {
+  n = Math.min(n, sim.settleLeft);
+  for (var i = 0; i < n; i++) step(true);
+  sim.settleLeft -= n;
+  if (sim.settleLeft === 0) sim.phase = 'approach';
+}
+
+// The approach: the impactor is carried in rigid, since a contact model at
+// 20 km/s and this step would have it through the ground before it touched it.
+// A fixed number of frames, so it reads the same whatever the geometry.
+var APPROACH_FRAMES = 75;
+function approachStep() {
+  var v = sim.vImp, dtF = sim.standoff / v / APPROACH_FRAMES;
+  var u = rigidProg.u;
+  gl.useProgram(rigidProg.p);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, sim.dst.fbo);
+  gl.viewport(0, 0, sim.W, sim.H);
+  gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sim.src.pos);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, sim.src.vel);
+  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, sim.src.aux);
+  gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, sim.src.q);
+  gl.uniform3f(u.uBulk1, sim.dir[0] * v, sim.dir[1] * v, sim.dir[2] * v);
+  gl.uniform1f(u.uDt, dtF);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  var t = sim.src; sim.src = sim.dst; sim.dst = t;
+  sim.t += dtF;
+  for (var i = 0; i < 3; i++) sim.cen2[i] += sim.dir[i] * v * dtF;
+  if (sim.cen2[1] <= sim.aImp) couple();
+}
+
+// The coupling: one pass, and the run is a crater opening rather than a rock
+// falling. The point source sits at the end of the path the projectile would
+// have driven — a couple of diameters in — which for an oblique impact puts
+// it downrange of first contact, and the crater comes out lopsided the way
+// Collins et al. 2020 found Chicxulub's was.
+function couple() {
+  var pen = 1.3 * sim.dImp;
+  var centre = [sim.cen2[0] + sim.dir[0] * pen, sim.cen2[1] + sim.dir[1] * pen, sim.cen2[2] + sim.dir[2] * pen];
+  var u = coupleProg.u;
+  gl.useProgram(coupleProg.p);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, sim.dst.fbo);
+  gl.viewport(0, 0, sim.W, sim.H);
+  gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sim.src.pos);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, sim.src.vel);
+  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, sim.src.aux);
+  gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, sim.mat);
+  gl.uniform3fv(u.uCentre, centre);
+  gl.uniform1f(u.uVimp, sim.vImp);
+  gl.uniform1f(u.uAimp, sim.aImp);
+  gl.uniform1f(u.uStall, 0.5 * sim.Dtc);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  var t = sim.src; sim.src = sim.dst; sim.dst = t;
+  sim.phase = 'full';
+  sim.t = 0;
+  sim.stepNo = 0;
+  sim.centre = centre;
+}
+
+// ---------- what the ground came out as ----------
+// Self-contained, so it can go into a worker the day the read-back costs more
+// than it is worth. Radial bins hold the settled surface: the rim is where it
+// stands highest, the crater is where it is below where the ground was.
+function craterStats(N, mref, a, P, V, R, o) {
+  var NB = 96, binW = o.Rbox / NB;
+  var top = new Float64Array(NB).fill(-1e9), any = new Uint8Array(NB);
+  var above = new Float64Array(NB);                  // what is over the old ground, by range
+  var i, r, b, m;
+  var exc = 0, excPlat = 0, air = 0, fastOrb = 0, fastEsc = 0, melt = 0, vap = 0, Tmax = 0;
+  var ke = 0, pe = 0, px = 0, py = 0, pz = 0, mass = 0;
+  // the melt, as one light: where it is, how big it reads, how hot it shines
+  var hotM = 0, hx = 0, hy = 0, hz = 0, Tw = 0, Tws = 0;
+  for (i = 0; i < N; i++) {
+    var x = P[i * 4], y = P[i * 4 + 1], z = P[i * 4 + 2], w = P[i * 4 + 3];
+    var vx = V[i * 4], vy = V[i * 4 + 1], vz = V[i * 4 + 2], T = V[i * 4 + 3];
+    if (w < 0.5) continue;                           // the frozen shell is not part of the answer
+    m = mref * R[i];
+    var sp2 = vx * vx + vy * vy + vz * vz;
+    mass += m;
+    ke += 0.5 * m * sp2 * o.vSI * o.vSI;             // joules
+    pe += m * o.gSI * y * o.lSI;
+    px += m * vx; py += m * vy; pz += m * vz;
+    if (T > Tmax) Tmax = T;
+    // the melt is what the coupling's shock made melt, which the pass marked
+    // as it went — not whatever the contacts have since heated past 1500 K,
+    // which a model that books every joule it dissipates as heat overstates
+    if (w > 2.5 && w < 3.5) melt += m;
+    if (T > 2500) vap += m;
+    if (T > 1200) {
+      hotM += m; hx += m * x; hy += m * y; hz += m * z;
+      var Tc = Math.min(T, 12000), wt = Tc * Tc;     // the light is the hot patches', not the average's
+      Tw += wt * Tc; Tws += wt;
+    }
+    r = Math.sqrt(x * x + z * z);
+    if (y > 0) {
+      exc += m;
+      above[Math.min(NB - 1, Math.floor(r / binW))] += m;
+      if (w > 1.5 && w < 2.5) excPlat += m;
+      if (sp2 > 0.0225) {                            // still moving: in the curtain, not on the blanket
+        air += m;
+        var sp = Math.sqrt(sp2);
+        if (sp > o.vOrb) fastOrb += m;
+        if (sp > o.vEsc) fastEsc += m;
+      }
+    }
+    if (sp2 < 0.0225 && r < o.Rbox) {                // settled: it can speak for the surface
+      b = Math.min(NB - 1, Math.floor(r / binW));
+      if (y > top[b]) { top[b] = y; any[b] = 1; }
+    }
+  }
+  // the rim, and where the surface crosses back through where the ground was
+  var rimH = -1e9, rimR = 0, floorY = 0, craterR = 0, seen = false;
+  for (b = 0; b < NB; b++) {
+    if (!any[b]) continue;
+    if (top[b] > rimH) { rimH = top[b]; rimR = (b + 0.5) * binW; }
+    if (top[b] < floorY) floorY = top[b];
+    if (top[b] < -0.05) { craterR = (b + 1) * binW; seen = true; }
+    else if (seen && top[b] >= -0.05) break;
+  }
+  // The melt pool speaks to the renderer in the same words the giant impact's
+  // planet does — a centre, a radius and a surface temperature — so the shared
+  // lighting lifts the ejecta curtain off the glow underneath it with no idea
+  // that this is a crater and not a planet.
+  var poolR = Math.cbrt(3 * (hotM / o.rhoSI) / (4 * Math.PI)) / o.lSI;
+  // what is over the old ground splits at the rim: inside it the floor and
+  // walls were lifted, outside it the material was thrown there
+  var thrown = 0;
+  for (b = Math.ceil(rimR / binW); b < NB; b++) thrown += above[b];
+  return { craterD: 2 * craterR, rimR: rimR, rimH: rimH, depth: -floorY,
+           excavated: exc, thrown: thrown, platform: excPlat, airborne: air,
+           fastOrb: fastOrb, fastEsc: fastEsc, melt: melt, vapour: vap, Tmax: Tmax,
+           mass: mass, KE: ke, PE: pe, drift: Math.sqrt(px * px + py * py + pz * pz) / mass,
+           Tsurf: Tws > 0 ? Tw / Tws : 0, R: Math.max(poolR, 1e-3), vel: [0, 0, 0],
+           com: hotM > 0 ? [hx / hotM, hy / hotM, hz / hotM] : [0, 0, 0] };
+}
+
+var posBuf = null, velBuf = null, analyzedAt = 0;
+function analyze() {
+  var N = sim.N;
+  if (!posBuf || posBuf.length !== N * 4) { posBuf = new Float32Array(N * 4); velBuf = new Float32Array(N * 4); }
+  analyzedAt = sim.stepNo;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, sim.src.fbo);
+  gl.readBuffer(gl.COLOR_ATTACHMENT0); gl.readPixels(0, 0, sim.W, sim.H, gl.RGBA, gl.FLOAT, posBuf);
+  gl.readBuffer(gl.COLOR_ATTACHMENT1); gl.readPixels(0, 0, sim.W, sim.H, gl.RGBA, gl.FLOAT, velBuf);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  report = craterStats(N, sim.m, sim.a, posBuf, velBuf, sim.matR, {
+    Rbox: sim.Rbox, lSI: L_UNIT, vSI: V_UNIT, gSI: G_EARTH, rhoSI: sim.rhoT,
+    vOrb: 7900 / V_UNIT, vEsc: 11200 / V_UNIT
+  });
+  report.t = sim.t;
+  CC.setReport(report);
+}
+
+// ---------- HUD ----------
+function fmtTime(t) {
+  var sec = Math.abs(t) * T_UNIT, sign = t < 0 ? '−' : '+';
+  var mm = Math.floor(sec / 60), ss = sec - mm * 60;
+  return 'T' + sign + ' ' + mm + 'm ' + (ss < 10 ? '0' : '') + ss.toFixed(1) + 's';
+}
+function fmtCount(n) { return n >= 1e6 ? (n / 1e6).toFixed(n % 1e6 ? 1 : 0) + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'k' : String(n); }
+function fmtKm(x) { return x >= 100 ? Math.round(x) + ' km' : x.toFixed(1) + ' km'; }
+// a mass in kilograms, as tonnes with a prefix anyone can hold
+function fmtMass(kg) {
+  var t = kg / 1000;
+  if (t >= 1e12) return (t / 1e12).toFixed(t >= 1e13 ? 0 : 1) + ' Tt';
+  if (t >= 1e9) return (t / 1e9).toFixed(t >= 1e10 ? 0 : 1) + ' Gt';
+  if (t >= 1e6) return (t / 1e6).toFixed(1) + ' Mt';
+  return Math.round(t) + ' t';
+}
+var lastReport = '';
+function showReport(rep, rows) {
+  var html = '';
+  for (var i = 0; i < rows.length; i++)
+    html += '<b>' + rows[i][0] + '</b><span class="v">' + rows[i][1] + '</span><i>' + (rows[i][2] || '') + '</i>';
+  if (html === lastReport && !rep.hidden) return;
+  lastReport = html;
+  rep.innerHTML = html;
+  rep.hidden = false;
+  fitPanel();
+}
+var fpsFrames = 0, fpsT0 = performance.now(), fps = 0;
+function hud() {
+  var sub = PRESETS[S.preset] ? PRESETS[S.preset].label : 'custom';
+  if (!sim) sub += ' · building';
+  else if (sim.phase === 'settle') sub += ' · settling ' + Math.round(100 * (1 - sim.settleLeft / sim.settleTotal)) + '%';
+  else if (run.paused) sub += ' · paused';
+  else if (sim.phase === 'approach') sub += ' · inbound';
+  else if (sim.t < 10) sub += ' · excavating';
+  else sub += ' · collapse';
+  $('hud-sub').textContent = sub;
+  $('hud-clock').textContent = sim ? fmtTime(sim.t) : 'T− 0m 00.0s';
+  $('hud-fps').textContent = sim ? fmtCount(sim.N) + (DEV.compact ? '' : ' bodies') + ' · ' + Math.round(sim.a * L_UNIT / 500) / 2 + ' km grain · ' + fps + ' fps' : '';
+  var rep = $('hud-report');
+  if (!report || !sim) return;
+  var r = report, dash = '—';
+  var Mt = sim.energy / MT_TNT;
+  var eStr = Mt >= 1e6 ? (Mt / 1e6).toFixed(0) + ' Tt TNT' : Mt >= 1e3 ? (Mt / 1e3).toFixed(0) + ' Gt TNT' : Math.round(Mt) + ' Mt TNT';
+  var pct = function (x) { return (100 * x).toFixed(x < 0.01 ? 2 : x < 0.1 ? 1 : 0) + ' %'; };
+  var dug = r.craterD > 0 ? fmtKm(r.craterD * L_UNIT / 1000) : dash;
+  if (DEV.compact) {
+    showReport(rep, [
+      ['energy', sim.energy.toExponential(1) + ' J', eStr],
+      ['crater', dug, '→ ' + fmtKm(sim.Dfr / 1000) + ' final'],
+      ['thrown out', fmtMass(r.thrown), 'past the rim'],
+      ['sulfur', '67–325 Gt', 'not from this run']
+    ]);
+    return;
+  }
+  showReport(rep, [
+    ['energy', sim.energy.toExponential(2) + ' J', eStr + ' · ' + fmtMass(sim.mImp) + ' at ' + S.vimp + ' km/s'],
+    ['crater', dug, 'π-scaling: ' + fmtKm(sim.DtcM / 1000) + ' transient → ' + fmtKm(sim.Dfr / 1000) + ' final'],
+    ['depth', r.depth > 0 ? fmtKm(r.depth * L_UNIT / 1000) : dash, 'below the old ground · rim at ' + fmtKm(r.rimR * L_UNIT / 1000)],
+    ['thrown out', fmtMass(r.thrown), 'past the rim · still aloft ' + fmtMass(r.airborne)],
+    ['suborbital', pct(r.fastOrb / Math.max(r.airborne, 1e-9)), 'of it past 7.9 km/s, ' + pct(r.fastEsc / Math.max(r.airborne, 1e-9)) + ' past escape'],
+    ['melt', (r.melt / sim.rhoT / 1e9).toFixed(0) + ' km³', fmtMass(r.melt) + ' · platform ' + pct(r.platform / Math.max(r.excavated, 1e-9)) + ' of the ejecta'],
+    ['sulfur', '67–325 Gt', 'Gulick 2025 · Artemieva & Morgan 2017'],
+    ['seismic', 'M' + sim.Mw.toFixed(1), 'Schultz & Gault · drift ' + (r.drift * V_UNIT).toFixed(1) + ' m/s']
+  ]);
+}
+
+// ---------- the loop ----------
+var frameNo = 0;
+function frame() {
+  if (run.lost) return;
+  requestAnimationFrame(frame);
+  resize();
+  if (sim) {
+    if (sim.phase === 'settle') settleSome(Math.max(2, Math.round(65536 / sim.N * 16)));
+    else if (!run.paused) {
+      if (sim.phase === 'approach') approachStep();
+      else {
+        stepAcc += S.speed;
+        var guard = 0;
+        while (stepAcc >= 1 && guard++ < 32 && sim.phase === 'full') { step(false); sim.t += sim.dt; stepAcc -= 1; }
+      }
+    }
+  }
+  render();
+  if (sim && sim.phase === 'full' && (frameNo % ANALYZE_EVERY === 0 || sim.stepNo - analyzedAt >= 360)) analyze();
+  frameNo++;
+  fpsFrames++;
+  var now = performance.now();
+  if (now - fpsT0 > 500) { fps = Math.round(fpsFrames * 1000 / (now - fpsT0)); fpsFrames = 0; fpsT0 = now; }
+  governQuality(now, fps);
+  hud();
+}
+
+// ---------- controls ----------
+function setOn(container, attr, value) {
+  container.querySelectorAll('button[' + attr + ']').forEach(function (b) { b.classList.toggle('on', b.getAttribute(attr) === String(value)); });
+}
+function syncSliders() {
+  $('set-imp').value = S.imp; $('val-imp').textContent = S.imp < 10 ? S.imp.toFixed(1) : String(S.imp);
+  $('set-vimp').value = S.vimp; $('val-vimp').textContent = S.vimp;
+  $('set-angle').value = S.angle; $('val-angle').textContent = S.angle;
+  $('set-sed').value = S.sed; $('val-sed').textContent = S.sed.toFixed(1);
+  $('set-dens').value = S.dens; $('val-dens').textContent = S.dens;
+  $('set-n').value = S.nIdx; $('val-n').textContent = N_LABELS[S.nIdx];
+  $('set-rest').value = S.rest; $('val-rest').textContent = S.rest.toFixed(2);
+  $('set-exp').value = S.exposure; $('val-exp').textContent = S.exposure.toFixed(1);
+  $('set-glow').value = S.glow; $('val-glow').textContent = S.glow.toFixed(1);
+  $('val-shade').textContent = S.shade ? 'on' : 'off';
+  $('val-stars').textContent = S.stars ? 'on' : 'off';
+}
+$('hud-preset').addEventListener('click', function (e) {
+  var b = e.target.closest('button[data-preset]');
+  if (!b) return;
+  var p = PRESETS[b.getAttribute('data-preset')];
+  S.preset = b.getAttribute('data-preset'); S.imp = p.imp; S.vimp = p.vimp; S.angle = p.angle;
+  setOn($('hud-preset'), 'data-preset', S.preset);
+  syncSliders();
+  build();
+});
+$('hud-run').addEventListener('click', function (e) {
+  var b = e.target.closest('button');
+  if (!b) return;
+  if (b.id === 'btn-pause') togglePause();
+  else if (b.id === 'btn-restart') build();
+  else if (b.hasAttribute('data-speed')) { S.speed = parseFloat(b.getAttribute('data-speed')); setOn($('hud-run'), 'data-speed', S.speed); }
+});
+function togglePause() {
+  run.paused = !run.paused;
+  var b = $('btn-pause');
+  b.classList.toggle('paused', run.paused);
+  b.setAttribute('aria-label', run.paused ? 'resume' : 'pause');
+  b.setAttribute('title', (run.paused ? 'resume' : 'pause') + ' — space');
+}
+function fitPanel() {
+  var p = $('adv-panel');
+  p.style.maxHeight = '';
+  if (p.hidden) return;
+  var top = p.getBoundingClientRect().top;
+  var floor = window.visualViewport ? visualViewport.height : window.innerHeight;
+  if (DEV.compact) {
+    var st = $('hud-stat').getBoundingClientRect();
+    if (st.height) floor = Math.min(floor, st.top);
+    var r = $('hud-report');
+    if (!r.hidden && window.innerWidth <= 640) floor = Math.min(floor, r.getBoundingClientRect().top);
+  }
+  var room = floor - top - 10;
+  if (room < p.scrollHeight) p.style.maxHeight = Math.max(120, room) + 'px';
+}
+$('adv-toggle').addEventListener('click', function () {
+  var p = $('adv-panel'); p.hidden = !p.hidden; $('adv-toggle').classList.toggle('on', !p.hidden);
+  fitPanel();
+});
+window.addEventListener('resize', fitPanel);
+window.addEventListener('orientationchange', function () { setTimeout(fitPanel, 250); });
+function custom() { S.preset = 'custom'; setOn($('hud-preset'), 'data-preset', ''); }
+function onRange(id, live, apply, keepPreset) {
+  var el = $(id);
+  el.addEventListener('input', function () { apply(parseFloat(el.value)); syncSliders(); if (live) live(); });
+  if (!live) el.addEventListener('change', function () { if (!keepPreset) custom(); build(); });
+}
+onRange('set-imp', null, function (v) { S.imp = v; });
+onRange('set-vimp', null, function (v) { S.vimp = v; });
+onRange('set-angle', null, function (v) { S.angle = v; });
+onRange('set-sed', null, function (v) { S.sed = v; }, true);
+onRange('set-dens', null, function (v) { S.dens = v; }, true);
+onRange('set-n', null, function (v) { S.nIdx = v | 0; }, true);
+onRange('set-rest', null, function (v) { S.rest = v; }, true);
+onRange('set-exp', function () {}, function (v) { S.exposure = v; });
+onRange('set-glow', function () {}, function (v) { S.glow = v; });
+$('set-shade').addEventListener('change', function () { S.shade = $('set-shade').checked; syncSliders(); });
+$('set-stars').addEventListener('change', function () { S.stars = $('set-stars').checked; syncSliders(); });
+window.addEventListener('keydown', function (e) {
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON')) return;
+  if (e.code === 'Space') { e.preventDefault(); if (sim && sim.phase !== 'settle') togglePause(); }
+  else if (e.code === 'KeyR') build();
+});
+
+// for scripted screenshots: run straight to a sim time and hold
+window.__impact = {
+  get sim() { return sim; },
+  get report() { return report; },
+  get look() { return LOOK; },
+  get cam() { return cam; },
+  get lights() { return VIEW.lights; },
+  sortNow: function () { analyze(); return report; },
+  runTo: function (t) {
+    if (!sim || sim.t > t) build();
+    while (sim.phase === 'settle') settleSome(64);
+    var guard = 0;
+    while (sim.phase === 'approach' && guard++ < 4000) approachStep();
+    while (sim.phase === 'full' && sim.t < t) { step(false); sim.t += sim.dt; }
+    analyze();
+    run.paused = true; $('btn-pause').classList.add('paused');
+    return sim.t;
+  }
+};
+
+cam.pitch = 0.45;   // a crater has to be looked into, but from its own rim
+syncSliders();
+resize();
+build();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

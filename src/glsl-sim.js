@@ -223,27 +223,25 @@ var CELL_FS = [
 //    keeps the material incompressible and turns impact energy into heat),
 //    gravity read off the mesh — or, off the mesh, from its total mass.
 //    Symplectic Euler: kick, then drift.
-var SIM_FS = [
+// The step. Contacts, heat and the integration are the same wherever this
+// runs; where the pull comes from is not, so the page says. 'mesh' is the
+// self-gravitating particle mesh with its pairwise correction, 'field' a
+// constant — a patch of ground small enough that gravity is g and down.
+var SIM_PRE = [
   '#version 300 es',
   'precision highp float;',
   'precision highp int;',
   'precision highp sampler2D;',
   'uniform sampler2D uPos;',      // xyz — position, w — body (0 target, 1 impactor)
   'uniform sampler2D uVel;',      // xyz — velocity, w — temperature, K
-  'uniform sampler2D uForce;',
-  'uniform sampler2D uMono;',
   'uniform sampler2D uMat;',      // r — mass, in Earth-mantle particles
   'uniform sampler2D uS0;', 'uniform sampler2D uS1;', 'uniform sampler2D uS2;', 'uniform sampler2D uS3;',
   'uniform sampler2D uS4;', 'uniform sampler2D uS5;', 'uniform sampler2D uS6;', 'uniform sampler2D uS7;',
   'uniform ivec2 uSize;',
   'uniform float uInvCell;',
   'uniform float uCell;',
-  'uniform float uInvH;',
-  'uniform float uL;',
   'uniform float uDt;',
   'uniform float uGDt;',          // the mesh gravity's time step: the steps it stands for, as one impulse — or 0
-  'uniform float uGm;',
-  'uniform float uEps2;',
   'uniform float uTouch;',        // contact distance, 2a
   'uniform float uLink2;',        // neighbour radius²
   'uniform float uK;',            // contact spring
@@ -263,9 +261,6 @@ var SIM_FS = [
   'uniform vec3 uSpin0;',
   'uniform vec3 uSpin1;',
   'uniform sampler2D uQ;',        // r — the heat this particle holds
-  'uniform sampler2D uPPSlot;',   // r — this particle's seat on the loose list, or -1
-  'uniform sampler2D uPPForce;',  // the pairwise correction, by seat
-  GLSL_GRID,
   GLSL_HGRID,
   GLSL_SLOTS,
   'layout(location = 0) out vec4 oPos;',
@@ -319,6 +314,22 @@ var SIM_FS = [
   '      }',
   '    }',
   '  }',
+];
+var SIM_UNI_MESH = [
+  GLSL_GRID,
+  'uniform sampler2D uForce;',
+  'uniform sampler2D uMono;',
+  'uniform float uInvH;',
+  'uniform float uL;',
+  'uniform float uGm;',
+  'uniform float uEps2;',
+  'uniform sampler2D uPPSlot;',   // r — this particle's seat on the loose list, or -1
+  'uniform sampler2D uPPForce;',  // the pairwise correction, by seat
+];
+var SIM_UNI_FIELD = [
+  'uniform vec3 uGField;',   // the whole of gravity here: g, and down
+];
+var SIM_GRAV_MESH = [
   '  vec3 grav = vec3(0.0);',
   '  vec3 g = (p + uL) * uInvH - 0.5;',
   '  if (all(greaterThanEqual(g, vec3(0.0))) && all(lessThanEqual(g, vec3(63.0)))) {',
@@ -338,6 +349,11 @@ var SIM_FS = [
   '  }',
   '  float seat = texelFetch(uPPSlot, me, 0).r;',
   '  if (seat >= 0.0) grav += texelFetch(uPPForce, ivec2(int(seat) & 127, int(seat) >> 7), 0).xyz;',
+];
+var SIM_GRAV_FIELD = [
+  '  vec3 grav = uGField;'
+];
+var SIM_POST = [
   '  v += push * (uInvM / ri) * uDt + grav * uGDt;',
   '  vec3 vr = cross(body < 3.5 ? uSpin0 : uSpin1, p - (body < 3.5 ? uCen0 : uCen1));',   // the body's spin at p
   '  if (uSettle > 0.5) {',                                                                    // damp everything but the spin,
@@ -356,7 +372,28 @@ var SIM_FS = [
   '  oAux = vec4(grav, nb);',
   '  oQ = vec4(Q, 0.0, 0.0, 0.0);',
   '}'
-].join('\n');
+];
+// A page can also ask for one material to be held still — the floor and walls
+// of a patch of ground, standing in for the rest of the world that is not in
+// the box. It is opt-in because a material index means whatever the page says
+// it means, and index 0 is the target's core in the giant impact.
+function simFS(o) {
+  var field = !!o && o.gravity === 'field';
+  var frozen = !!o && o.frozen;
+  var uni = (field ? SIM_UNI_FIELD : SIM_UNI_MESH).slice();
+  if (frozen) uni = uni.concat(["uniform float uFrozen;   // the material that does not move"]);
+  var post = SIM_POST;
+  if (frozen) {
+    post = [];
+    for (var i = 0; i < SIM_POST.length; i++) {
+      if (SIM_POST[i] === '  p += v * uDt;') post.push('  if (abs(body - uFrozen) < 0.5) v = vec3(0.0);');
+      post.push(SIM_POST[i]);
+    }
+  }
+  return SIM_PRE.slice(0, 4)
+    .concat(uni, SIM_PRE.slice(4), field ? SIM_GRAV_FIELD : SIM_GRAV_MESH, post)
+    .join('\n');
+}
 
 // The approach is a two-body problem solved on the CPU; the bodies fly in
 // rigid, this pass just carries them — and turns each about its centre.
@@ -561,7 +598,7 @@ var PPFORCE_FS = [
 
 G.GLSL_GRID = GLSL_GRID; G.GLSL_HGRID = GLSL_HGRID; G.GLSL_SLOTS = GLSL_SLOTS;
 G.SLOT_VS = SLOT_VS; G.SLOT_FS = SLOT_FS; G.DEP_VS = DEP_VS; G.DEP_FS = DEP_FS;
-G.COARSE_FS = COARSE_FS; G.MONO_FS = MONO_FS; G.CELL_FS = CELL_FS; G.SIM_FS = SIM_FS;
+G.COARSE_FS = COARSE_FS; G.MONO_FS = MONO_FS; G.CELL_FS = CELL_FS; G.simFS = simFS;
 G.RIGID_FS = RIGID_FS; G.PERM_FS = PERM_FS; G.DIAG_FS = DIAG_FS;
 G.PPGATHER_FS = PPGATHER_FS; G.PPFORCE_FS = PPFORCE_FS;
 

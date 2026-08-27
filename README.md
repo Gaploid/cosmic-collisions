@@ -1,12 +1,19 @@
 # Cosmic Collisions
 
-A giant impact, simulated: two planets of real mass fall together under their
-own gravity and collide — the splash, the tidal arm, the debris disk, and the
-moon that gathers out of it.
+Impacts, simulated. Two planets of real mass fall together under their own
+gravity and collide — the splash, the tidal arm, the debris disk, and the moon
+that gathers out of it. Or a fourteen-kilometre asteroid comes down on the
+Yucatán at twenty kilometres a second and opens a ninety-kilometre bowl in
+eighty seconds.
 
-**Live: https://gaploid.github.io/cosmic-collisions/**
+A page each, over one engine.
 
-## What it does
+- **[Giant impact](https://gaploid.github.io/cosmic-collisions/)** — Theia and
+  the proto-Earth, and the Moon that comes out of the disk.
+- **[Chicxulub](https://gaploid.github.io/cosmic-collisions/chicxulub.html)** —
+  the impact that ended the Cretaceous, from the ejecta curtain to the collapse.
+
+## The giant impact
 
 Not a shape to assemble but a simulation. A proto-Earth and an impactor from
 0.02 to 1 M⊕, differentiated iron core to mantle to crust, both arriving with an
@@ -35,6 +42,51 @@ out what their phone can do.
 
 Not SPH — no shocks, no vaporization — but the deformation, the tidal arm, the
 disk and the re-accretion are all there.
+
+## Chicxulub
+
+A cylinder of the Yucatán platform — three kilometres of carbonate over
+crystalline basement, its wall and floor held still because the rest of the
+world is not in the box — and a carbonaceous asteroid arriving at 60° from the
+north-east at 20 km/s. The ground erupts; the ejecta curtain goes up as an
+inverted cone; the transient bowl opens in about eighty seconds and then
+collapses, wider and shallower, into the crater that is there today.
+
+- **Presets** — *chicxulub*, 14 km at 20 km/s and 60°, the steeply-inclined
+  trajectory Collins et al. found; *vertical*; *grazing*; a 1 km rock; a 30 km one.
+- **Readout** — the energy in joules and in tonnes of TNT, the crater the run
+  actually digs against the crater the scaling asks for, what was thrown past
+  the rim and what is still in the air, how much of it left faster than orbital
+  and than escape speed, the volume of shock melt, and the seismic magnitude.
+- **Advanced panel** — impactor diameter, speed, angle, the thickness of the
+  sediment and the density of the target restart the run.
+
+**Where the numbers come from, and where they do not.** A contact model has no
+shock and no vapour, so it cannot be asked what a 20 km/s impact does in its
+first second. What is known is what comes out of that second, and that is what
+the run is given: an excavation flow, radial from a point source buried at the
+end of the projectile's path, whose speed at a given range is Housen &
+Holsapple's and whose direction is Maxwell's Z-model — up and out at about 35°
+where it reaches the surface. The flow goes to nothing at the transient radius
+π-group scaling gives, so the hole is the right size by construction. What the
+sim does itself, and what is therefore worth watching, is everything after: the
+curtain, the ballistic blanket, the rim, and the collapse that turns a deep bowl
+into a wide one. The readout prints the crater it dug beside the crater the
+scaling asked for, so the two can be compared rather than confused — across the
+five presets they agree to between 0.7 and 1.2.
+
+The sulfur is not from the run at all. How much of the anhydrite reached the
+stratosphere is a question about vapour plume expansion, which needs a hydrocode;
+the readout quotes the published range and says whose it is.
+
+The numbers it stands on: Collins, Melosh & Marcus 2005 (*Meteoritics &
+Planetary Science* **40**, 817) for the crater scaling and the seismic
+magnitude; Housen & Holsapple 2011 for the ejecta velocities; Melosh 1989 §5.4
+for the Z-model; Collins et al. 2020 (*Nature Communications* **11**, 1480) for
+the 45–60° trajectory from the north-east; Gulick et al. 2013 and IODP-ICDP
+Expedition 364 for the target and the peak ring; Fischer-Gödde et al. 2024
+(*Science* **385**, 752) for the carbonaceous impactor; Artemieva & Morgan 2017
+and Gulick et al. 2025 for the two ends of the sulfur estimate.
 
 ## Tech
 
@@ -68,6 +120,24 @@ credit.
 
 Broad strokes, newest first; the commit history tells each one in full.
 
+- **2026-08-27 — Chicxulub.** The page simulated one thing, and the one thing
+  was a planet. This is the other end of the scale: an asteroid six thousand
+  times lighter than a single particle of the giant impact, hitting ground that
+  is a patch rather than a world. So the gravity is a constant instead of a
+  mesh, the clock runs in seconds instead of hours, the ground is a cylinder of
+  the Yucatán platform with its wall and floor held still, and the box is cut to
+  the crater rather than to a fixed size, so a kilometre of rock and thirty are
+  resolved the same. The impactor is carried in rigid — at 20 km/s a contact
+  model would have it through the ground before it touched — and at contact it
+  is consumed: it becomes melt, and the ground is handed an excavation flow,
+  radial from a point source at the end of the path it would have driven, with
+  Housen & Holsapple's speed and Maxwell's Z-model direction, going to nothing
+  at the transient radius π-scaling gives. Everything after is the sim's own,
+  and it is the part worth watching: the curtain rising as an inverted cone, the
+  blanket landing, the rim standing up, and the deep bowl slumping into a wide
+  one over the next ten minutes. The readout prints the hole it dug beside the
+  hole the scaling asked for. The engine they now share moved to `src/`, and
+  each scenario is a page that links to the other.
 - **2026-08-27 — A readout that holds still.** The report was a stack of
   sentences: rows appeared and vanished with the run, every number sat wherever
   the words before it ended, and the box changed width with the longest line, so

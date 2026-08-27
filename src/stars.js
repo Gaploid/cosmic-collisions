@@ -58,6 +58,43 @@ var STAR_FS = [
   '}'
 ].join('\n');
 
+// The catalogue into two attributes: direction (int16 ×3) and magnitude,
+// colour (uint8 ×2). The same sky hangs over every scenario, so the buffers
+// are built here rather than copied into each page.
+function starSetup(gl, starProg, vao) {
+  var STAR_COUNT = 0, starVao = gl.createVertexArray();
+  var raw = unb64(STAR_CAT);
+  STAR_COUNT = (raw.length / 6) | 0;
+  var dir = new Int16Array(STAR_COUNT * 3), mag = new Uint8Array(STAR_COUNT * 2);
+  for (var i = 0; i < STAR_COUNT; i++) {
+    var ra = (raw[i * 6] | (raw[i * 6 + 1] << 8)) / 65536 * 6.2831853;
+    var dv = (raw[i * 6 + 2] | (raw[i * 6 + 3] << 8));
+    if (dv > 32767) dv -= 65536;
+    var dec = dv / 32767 * 1.5707963, cd = Math.cos(dec);
+    dir[i * 3] = Math.round(cd * Math.cos(ra) * 32767);
+    dir[i * 3 + 1] = Math.round(Math.sin(dec) * 32767);
+    dir[i * 3 + 2] = Math.round(cd * Math.sin(ra) * 32767);
+    mag[i * 2] = raw[i * 6 + 4];
+    mag[i * 2 + 1] = raw[i * 6 + 5];
+  }
+  gl.bindVertexArray(starVao);
+  var b = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, b);
+  gl.bufferData(gl.ARRAY_BUFFER, dir, gl.STATIC_DRAW);
+  var loc = gl.getAttribLocation(starProg.p, 'aDir');
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, 3, gl.SHORT, true, 0, 0);
+  b = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, b);
+  gl.bufferData(gl.ARRAY_BUFFER, mag, gl.STATIC_DRAW);
+  loc = gl.getAttribLocation(starProg.p, 'aStar');
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, 2, gl.UNSIGNED_BYTE, true, 0, 0);
+  gl.bindVertexArray(vao);
+  return { vao: starVao, count: STAR_COUNT };
+}
+
+G.starSetup = starSetup;
 G.STAR_CAT = STAR_CAT; G.unb64 = unb64; G.STAR_VS = STAR_VS; G.STAR_FS = STAR_FS;
 
 })();

@@ -8,8 +8,7 @@ var CC = window.CC || (window.CC = {});
 var gl = null, canvas = null, S = null, sim = null, report = null;
 var gProg, blurProg, shadeProg, sunProg, brightProg, bloomProg, toneProg, fxaaProg, starProg;
 var vao = null, starVao = null, STAR_COUNT = 0, MAX_POINT = 0;
-// the two crusts, this scenario's: everything else the palette decides
-var COL_TARGET = [1, 1, 1], COL_IMPACTOR = [1, 1, 1];
+var pal = new Float32Array(24);   // eight materials, this scenario's
 var lastLights = null;
 var DEV = CC.dev, LOOK = CC.look, FOV = CC.FOV, glowCol = CC.glowCol, run = CC.run;
 var BLUR_PASSES = DEV.BLUR_PASSES, DPR_CAP = DEV.DPR_CAP;
@@ -65,6 +64,10 @@ function resize() {
 
 // ---------- camera ----------
 var cam = { yaw: 0.35, pitch: 0.42, dist: 7.5 };
+// how far in and out the wheel and the pinch may go. A planet is looked at
+// from a few radii; a crater from a few of its own, which is a different
+// number of length units, so the page says.
+var distMin = 1.5, distMax = 80;
 var camTarget = [0, 0, 0], camPos = [0, 0, 0];
 var pointers = new Map(), pinch0 = 0, dist0 = 0;
 // The pointer, the wheel and the pinch. Wired at init(), when there is a
@@ -88,7 +91,7 @@ function wireCamera() {
     if (pointers.size === 2 && pinch0 > 0) {
       var p = Array.from(pointers.values());
       var d = Math.hypot(p[0][0] - p[1][0], p[0][1] - p[1][1]);
-      cam.dist = Math.max(1.5, Math.min(80, dist0 * pinch0 / Math.max(d, 1)));
+      cam.dist = Math.max(distMin, Math.min(distMax, dist0 * pinch0 / Math.max(d, 1)));
     }
   });
   function endPointer(e) { pointers.delete(e.pointerId); if (pointers.size === 0) canvas.classList.remove('dragging'); }
@@ -100,7 +103,7 @@ function wireCamera() {
   canvas.addEventListener('pointercancel', endPointer);
   canvas.addEventListener('wheel', function (e) {
     e.preventDefault();
-    cam.dist = Math.max(1.5, Math.min(80, cam.dist * Math.exp(e.deltaY * 0.0012)));
+    cam.dist = Math.max(distMin, Math.min(distMax, cam.dist * Math.exp(e.deltaY * 0.0012)));
   }, { passive: false });
 }
 
@@ -146,8 +149,7 @@ function render() {
     gl.uniform1f(g.uFat, LOOK.fat);
     gl.uniform1f(g.uP22, proj[10]);
     gl.uniform1f(g.uP32, proj[14]);
-    gl.uniform3fv(g.uCol0, COL_TARGET);
-    gl.uniform3fv(g.uCol1, COL_IMPACTOR);
+    gl.uniform3fv(g['uPal[0]'], pal);
     gl.drawArrays(gl.POINTS, 0, sim.N);
 
     // 2. bilateral blur, two particles wide, x then y, twice over
@@ -314,7 +316,7 @@ CC.view = {
   init: function (o) {
 
     gl = o.gl; canvas = o.canvas; S = o.S;
-    COL_TARGET = o.cols[0]; COL_IMPACTOR = o.cols[1];
+    for (var i = 0; i < o.pal.length && i < 8; i++) pal.set(o.pal[i], i * 3);
 
     floatTex = GLH.floatTex; screenTarget = GLH.screenTarget; freeScreen = GLH.freeScreen; bloomTarget = GLH.bloomTarget;
 
@@ -341,7 +343,8 @@ CC.view = {
 
   get lights() { return lastLights; },
 
-  setTarget: function (t) { camTarget = t; }
+  setTarget: function (t) { camTarget = t; },
+  clampDist: function (lo, hi) { distMin = lo; distMax = hi; cam.dist = Math.max(lo, Math.min(hi, cam.dist)); }
 
 };
 
