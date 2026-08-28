@@ -38,7 +38,8 @@ CC.onReport(function (r) { report = r; });
 function radec(ra, dec) { var r = ra * Math.PI / 180, d = dec * Math.PI / 180, c = Math.cos(d); return [c * Math.cos(r), Math.sin(d), c * Math.sin(r)]; }
 var NGP = radec(192.8595, 27.1284), GC = radec(266.4051, -28.9362);
 var GX = (function () { var k = NGP[0] * GC[0] + NGP[1] * GC[1] + NGP[2] * GC[2], v = [GC[0] - NGP[0] * k, GC[1] - NGP[1] * k, GC[2] - NGP[2] * k], l = Math.hypot(v[0], v[1], v[2]); return [v[0] / l, v[1] / l, v[2] / l]; })();
-var GY = [NGP[1] * GX[2] - NGP[2] * GX[1], NGP[2] * GX[0] - NGP[0] * GX[2], NGP[0] * GX[1] - NGP[1] * GX[0]];
+var GY = [GX[1] * NGP[2] - GX[2] * NGP[1], GX[2] * NGP[0] - GX[0] * NGP[2], GX[0] * NGP[1] - GX[1] * NGP[0]];   // GX × NGP: longitude grows toward Cygnus, as it should — Deneb at l = 84°
+var LMC = radec(80.894, -69.756), SMC = radec(13.187, -72.829);
 
 // ---------- screen-sized targets ----------
 var gbuf = null, blurA = null, blurB = null, bloomA = null, bloomB = null, bloomC = null, bloomD = null, skyT = null;
@@ -237,6 +238,7 @@ function render() {
   gl.uniform2f(sk.uInvP, 1 / proj[0], 1 / proj[5]);
   gl.uniformMatrix3fv(sk.uInvRot, false, invRot);
   gl.uniform3fv(sk.uNGP, NGP); gl.uniform3fv(sk.uGX, GX); gl.uniform3fv(sk.uGY, GY);
+  gl.uniform3fv(sk.uLMC, LMC); gl.uniform3fv(sk.uSMC, SMC);
   gl.uniform1f(sk.uMw, S.stars ? LOOK.mw : 0);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 

@@ -51,7 +51,7 @@ if (narrowMQ) {
 // heat is, 0 at its centre of mass
 var LOOK = { glowT: 12000, white: 40000, bloomThr: 1.0, bloomK: 0.3, magma: 20, reach: 2.0,
              filmic: 0.7, vignette: 0.35, sunR: 0.006, sunI: 40, halo: 1.0, fxaa: 1, edge: 0.88, edgeSoft: 0.1, fat: 1.3,
-             ball: 0.6, bump: 1.6, cut: -1, mw: 0.15, sat: 1.1, bloomK2: 0.35, emberMax: 6, hotLight: 1 };
+             ball: 0.6, bump: 1.6, cut: -1, mw: 0.1, sat: 1.1, bloomK2: 0.35, emberMax: 6, hotLight: 1 };
 // magma: the hot bodies' light on what is next to them, in their own
 // brightness — the real figure is a hundred, a 3000 K surface outshines the
 // sun that much at these distances, but the glow is compressed for the eye

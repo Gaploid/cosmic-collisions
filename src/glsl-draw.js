@@ -482,10 +482,15 @@ var BLOOM_FS = [
 // the sky behind the stars: the Milky Way, where it really is. The stars sit
 // in equatorial coordinates, so the galactic plane is a fixed great circle
 // among them — its pole at RA 192.86°, Dec +27.13°, its centre at RA 266.41°,
-// Dec −28.94° — and the band is drawn about that circle: brightest and
-// widest toward the centre, thinning toward the anticentre, mottled with
-// star clouds and cut by dust lanes along the plane. Drawn at a quarter of
-// the size, since it is soft, and the sun pass lays it under everything.
+// Dec −28.94° — and the Galaxy is drawn in the longitude and latitude of that
+// circle, the way it looks from inside it: a thin disc, thicker and brighter
+// toward the centre in Sagittarius and thin and faint toward the anticentre;
+// the bulge, a swell of ±20° about the centre; the star clouds that mottle
+// it; the dust along the plane that darkens the very equator everywhere, and
+// the Great Rift, the lane that splits the band in two from Cygnus down
+// through Aquila to the centre; and off the band the two Magellanic Clouds.
+// All of it faint — it is the backdrop, not the subject. Drawn at a quarter
+// of the size, since it is soft, and the sun pass lays it under everything.
 var SKY_FS = [
   '#version 300 es',
   'precision highp float;',
@@ -493,24 +498,38 @@ var SKY_FS = [
   'uniform vec2 uRes;',
   'uniform vec2 uInvP;',
   'uniform mat3 uInvRot;',      // eye to world
-  'uniform vec3 uNGP;',         // the galactic pole, and in the plane: toward the centre, and 90° on
+  'uniform vec3 uNGP;',         // the galactic pole, and in the plane: toward the centre, and 90° on toward Cygnus
   'uniform vec3 uGX;',
   'uniform vec3 uGY;',
+  'uniform vec3 uLMC;',         // the Magellanic Clouds
+  'uniform vec3 uSMC;',
   'uniform float uMw;',
   'out vec4 o;',
   GLSL_NOISE,
   'void main() {',
   '  vec2 ndc = gl_FragCoord.xy / uRes * 2.0 - 1.0;',
   '  vec3 d = uInvRot * normalize(vec3(ndc * uInvP, -1.0));',
-  '  float b = asin(clamp(dot(d, uNGP), -1.0, 1.0));',
-  '  float l = atan(dot(d, uGY), dot(d, uGX));',
-  '  float toward = exp(-l * l / 1.6);',
-  '  float band = 0.5 * exp(-b * b / (0.008 + 0.01 * toward)) + 0.5 * exp(-b * b / (0.05 + 0.06 * toward));',
-  '  float bulge = 0.3 + 0.7 * toward;',
-  '  float clouds = 0.55 + 0.9 * (0.5 + 0.5 * fbm(d * 7.0, 4));',
-  '  float dust = smoothstep(0.05, 0.4, fbm(d * 11.0 + 5.0, 4)) * exp(-b * b / 0.006);',
-  '  float mw = band * bulge * clouds * (1.0 - 0.85 * dust);',
-  '  o = vec4(vec3(1.0, 0.92, 0.8) * mw * uMw, 1.0);',
+  '  float b = asin(clamp(dot(d, uNGP), -1.0, 1.0)), ab = abs(b);',
+  '  float l = atan(dot(d, uGY), dot(d, uGX));',                                       // 0 at the centre, +90° in Cygnus
+  '  float toward = 0.5 + 0.5 * cos(l);',                                               // 1 at the centre, 0 at the anticentre
+  '  float hb = 0.05 + 0.10 * toward * toward;',                                        // the disc\'s half-thickness: 3° at the anticentre, 9° at the centre
+  '  float disc = exp(-ab / hb) * (0.3 + 0.7 * toward * toward);',
+  '  disc += 0.7 * exp(-(l - 1.4) * (l - 1.4) / 0.06 - (b - 0.02) * (b - 0.02) / 0.02);',   // the Cygnus star cloud, and Carina–Centaurus, the bright stretch of the southern band
+  '  disc += 0.5 * exp(-(l + 0.9) * (l + 0.9) / 0.32 - b * b / 0.02);',
+  '  float bulge = 1.5 * exp(-l * l / 0.18 - (b + 0.01) * (b + 0.01) / 0.045);',
+  '  float n1 = fbm(d * 9.0, 4), n2 = fbm(d * 23.0 + 7.0, 3);',
+  '  float clouds = 0.7 + 0.6 * n1 + 0.25 * n2;',                                       // the star clouds, a few degrees across
+  '  float lane = exp(-b * b / 0.0008);',                                                // the dust on the very equator, 1° either side
+  '  float rw = smoothstep(-0.25, 0.1, l) * (1.0 - smoothstep(1.45, 1.75, l));',        // the Great Rift runs from just past the centre to Cygnus
+  '  float b0 = -0.02 + 0.03 * sin(l * 3.0 + 1.0);',                                    // and wanders a little off the plane
+  '  float rift = rw * exp(-(b - b0) * (b - b0) / 0.004);',                               // 2.6° either side
+  '  float dn = 0.5 + 0.5 * fbm(d * 14.0 + 3.0, 4), dn2 = 0.5 + 0.5 * fbm(d * 31.0 + 11.0, 3);',   // patchy, as dust is, on two scales
+  '  float dust = clamp(0.35 * lane * (0.5 + dn2) + 0.8 * rift * (0.25 + 0.55 * dn + 0.35 * dn2) + 0.35 * dn * exp(-ab / 0.06), 0.0, 0.8);',
+  '  float mw = (disc + bulge * exp(-ab / 0.25)) * clouds * (1.0 - dust);',
+  '  vec3 dl = d - uLMC, ds = d - uSMC;',
+  '  float clouds2 = 0.5 * exp(-dot(dl, dl) / 0.004) + 0.3 * exp(-dot(ds, ds) / 0.0012);',
+  '  vec3 col = mix(vec3(0.85, 0.9, 1.0), vec3(1.0, 0.9, 0.75), toward) * mw + vec3(0.9, 0.93, 1.0) * clouds2;',   // bluish white out along the arms, warm toward the bulge
+  '  o = vec4(col * uMw, 1.0);',
   '}'
 ].join('\n');
 

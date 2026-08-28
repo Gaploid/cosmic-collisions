@@ -228,9 +228,13 @@ Broad strokes, newest first; the commit history tells each one in full.
   each ball and taken out again: its colour swung from blue to yellow with
   the run's temperature, and a look that argues with the physics is worse
   than none. The *shading* switch turns the whole surface off and leaves
-  the plain skin to read the run by. Behind it all, the Milky Way,
-  drawn about the galactic plane where the catalogue's stars actually put it,
-  with star clouds and dust lanes; a third, widest bloom; a little
+  the plain skin to read the run by. Behind it all, the Milky Way, drawn
+  in the galactic longitude and latitude the catalogue's stars define, the
+  way it looks from inside it: the disc thick and bright toward Sagittarius
+  and thin toward the anticentre, the bulge, the star clouds, the dust on
+  the equator and the Great Rift splitting the band from Cygnus to the
+  centre, and the two Magellanic Clouds off it — and all of it faint, a
+  backdrop and not a subject; a third, widest bloom; a little
   saturation. The home field is carried in full floats: close in, a pixel's
   step across it is a quarter of a half-float's quantum, and the relief,
   which is its screen derivative, came out as terraces; and close in, where
