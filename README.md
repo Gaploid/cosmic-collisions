@@ -153,8 +153,11 @@ drew every step as a ring — relaxed and then crept into equilibrium so that
 nothing pops out of the surface. Symplectic Euler, Morton order, and books on
 momentum and energy that caught most of what was wrong. The picture is
 screen-space fluid rendering — impostors, a bilateral blur that melts them
-into a skin, a coverage cut that takes the beads off the limb — with hot rock
-glowing by its temperature and lighting everything else. ACES and FXAA.
+into a skin, a coverage cut that takes the beads off the limb — with a surface
+drawn on the skin in each grain's own coordinates, so it rides the material;
+a round body's skin leaning on the ball it is; and hot rock glowing by its
+temperature and lighting everything else. The Milky Way behind the catalogue's stars, where it really
+is. GGX, ACES and FXAA. The knobs are in `__impact.look`.
 
 ## The sky
 
@@ -172,6 +175,77 @@ credit.
 
 Broad strokes, newest first; the commit history tells each one in full.
 
+- **2026-08-27 — A surface.** The planet was a blue ball with the lumps the
+  impostors left in it: one colour per material, no relief, no glint, a limb
+  that tore into steps when the camera came close, and black behind it. It
+  wears a surface now. Each grain carries its home — where it sat in its body
+  when the body was built — through the blur as a fourth field, and the skin
+  is textured in those coordinates, so the surface rides the material: it
+  turns with the body, stretches with the arm, goes out with the ejecta. In
+  them a noise draws continents and hills, a cellular noise craters, and the
+  height's slope across the screen, from the derivatives the hardware keeps,
+  tilts the normal — relief with no parametrisation. The magma ocean wears a
+  crust of dark plates with the melt bright in the cracks between them; the
+  cores are metal; the sun glints by GGX, rough on the crust, glossy on the
+  melt, and the other body stands in it as a shadow. Where the skin is a
+  round body's own — within a few particles of the radius its mass is drawn
+  at — it leans on the ball: the normal is pulled toward the sphere's, and
+  the silhouette is the sphere's, feathered over a pixel, which is what took
+  the torn limb off the close view. The ball's radius is where the analysis
+  finds the density fall away, not where the mass says a cold ball would
+  end — a planet hot from the impact stands well above that, and a skin cut
+  at the mass-radius peeled it — and the skin is pulled and cut only where
+  it faces the way the ball's surface faces there, so the impactor crossing
+  the planet's shell on its way in keeps its own. And the cut itself is
+  only made while the bodies are whole balls, on the approach: after the
+  impact the planet wears what fell back on it, a loose layer above any
+  radius the analysis can name, and cutting at that radius left the layer
+  hanging as a glowing rind with a black gap under it. The one ball's shadow on
+  the other in sunlight went the same way: a body half into the planet
+  stood in the planet's shadow from the inside. And the hot bodies' light
+  on each other, which is real and by the inverse square — a magma moonlet
+  three radii off outshines the sun on the planet's night side — ended in
+  a hard terminator and cut the planet into zones, sunlit, moonlit and its
+  own glow, with seams between; it wraps past the terminator now, as a
+  light with a size does, and runs into a soft knee at six suns. And the
+  light sits where the heat is — the glow-weighted centroid of the body's
+  hot grains, their spread for its radius — not at its centre of mass:
+  while two bodies are one group in contact the centre of mass is between
+  them, a ball of the mass-radius round it cut across the impactor as a
+  flat zone of light with a hard edge, and the edge jumped with every
+  report; the light is eased toward each report now rather than jumped
+  to it. The rule that a body's light leaves the body's own skin alone —
+  convex, it cannot light itself, and the loose grains on it would sparkle
+  — was that same sphere, everything nearer the light than its radius; it
+  is the ball's own skin now, the pixels within a few particles of the
+  ball's radius that face the way the ball faces there, and the sphere
+  remains only for a light with no ball to its name. Where the material churns — a magma
+  ocean convecting at the grain scale, two bodies' grains mixed at the
+  contact — the home field is no surface, and a texture drawn in it
+  shimmers from frame to frame: the surface fades out where the field's
+  screen gradient outruns the skin's own, and the melt there is drawn
+  smooth, which is what a churning melt is. A shell of air was drawn round
+  each ball and taken out again: its colour swung from blue to yellow with
+  the run's temperature, and a look that argues with the physics is worse
+  than none. The *shading* switch turns the whole surface off and leaves
+  the plain skin to read the run by. Behind it all, the Milky Way,
+  drawn about the galactic plane where the catalogue's stars actually put it,
+  with star clouds and dust lanes; a third, widest bloom; a little
+  saturation. The home field is carried in full floats: close in, a pixel's
+  step across it is a quarter of a half-float's quantum, and the relief,
+  which is its screen derivative, came out as terraces; and close in, where
+  the blur's twelve taps sit five pixels apart, a dense pass goes first —
+  the raw depth steps at every disc's edge, each tap crossing an edge is a
+  step in the sum, and the normal blinked with the comb's period as
+  stripes. The render costs 0.8 ms more at the
+  default view and 2.4 close in, on an RTX 4070 at 2400×1350 — measured
+  against the old code in the same state and the same minute, since the
+  GPU's mood between sessions is worth more than that. One bug on the
+  way, found by counting NaNs in the HDR target with each debug view in
+  turn: the relief normalised a zero vector where the screen derivatives'
+  determinant was zero, `mix(n, NaN, 0.0)` is NaN, and a single NaN grows
+  into a black rectangle as the separable bloom blurs it — every normalise
+  in the shading has an alternative now.
 - **2026-08-27 — The planet.** Asked for the Earth to be breakable — the
   particle planet of the giant impact, with the rock going into it — and it
   is: the engine that runs Theia moved out of its page into `src/nbody.js`,

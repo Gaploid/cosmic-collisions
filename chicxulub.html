@@ -609,6 +609,7 @@ function buildCrater() {
   VIEW.setPalette(PALETTE);
   VIEW.setMaxPoint(0);
   VIEW.setRadPow(0);
+  VIEW.setLook({ balls: false, detail: 0, metal: [] });   // a patch of ground is no ball
   CC.setSim(sim);
   // frame the crater, but leave a view the viewer has set alone: only a
   // materially different hole is worth taking the camera back off them
@@ -1037,6 +1038,7 @@ function buildGlobe() {
   VIEW.setPalette(GLOBE_PAL);
   VIEW.setMaxPoint(26);   // a mote between the camera and the planet is still a mote
   VIEW.setRadPow(1 / 6);   // a compressed scale, like the glow's: heavier reads bigger without the light ones vanishing
+  VIEW.setLook({ balls: false, detail: 0, metal: [] });   // the graticule is the globe's surface
   CC.setSim(sim);
   VIEW.clampDist(1.04, 30);   // close enough in to see how small the hole is
   // ground zero sits on +x, so this puts it a quarter-turn round and a
@@ -1233,6 +1235,7 @@ function buildPlanet() {
   VIEW.setPalette(PLANET_PAL);
   VIEW.setMaxPoint(0);
   VIEW.setRadPow(0);
+  VIEW.setLook({ balls: true, metal: [1, 0, 0, 0, 1, 0, 0, 0], detail: CC.dev.PHONE ? 1 : 2 });   // the giant impact's Earth, drawn the way its own page draws it
   VIEW.clampDist(1.5, 80);
   // the rock comes in from −x and strikes the near side of that; the camera
   // sits off that side, a little round and above, where the sun already is

@@ -173,6 +173,11 @@ VIEW.init({ gl: gl, canvas: canvas, S: S, starVao: sky.vao, starCount: sky.count
             progs: { g: gProg, blur: blurProg, shade: shadeProg, sun: sunProg, bright: brightProg,
                      bloom: bloomProg, tone: toneProg, fxaa: fxaaProg, star: starProg } });
 var render = VIEW.render, resize = VIEW.resize, governQuality = VIEW.governQuality, cam = VIEW.cam;
+// what this page's bodies are to the picture: balls — round enough to take
+// the ball's normal and silhouette — with iron cores that are metal, and a
+// surface drawn on them, craters and all; a phone gets the surface without
+// the craters
+VIEW.setLook({ balls: true, metal: [1, 0, 0, 0, 1, 0, 0, 0], detail: PHONE ? 1 : 2 });
 
 // ---------- the engine ----------
 // src/nbody.js: the meshes, the passes, the step, the approach and the

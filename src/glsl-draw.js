@@ -1,19 +1,69 @@
 // The picture: sphere impostors, the bilateral blur that melts them into a
-// skin, the shading, the sun, bloom, the film.
+// skin, the surface drawn on that skin, the shading, the sky, the sun,
+// bloom, the film.
 (function () {
 'use strict';
 var CC = window.CC || (window.CC = {});
 var G = CC.glsl || (CC.glsl = {});
-var GLSL_MATCOL = G.GLSL_MATCOL, GLSL_GLOW = G.GLSL_GLOW;
+var GLSL_MATCOL = G.GLSL_MATCOL, GLSL_GLOW = G.GLSL_GLOW, GLSL_HASH = G.GLSL_HASH;
 
+// Noise, for the surface and for the sky: gradient noise on an integer
+// lattice keyed by the engine's own hash, its fractal sum, and a cellular
+// noise whose cells are craters. Three dimensions throughout — the surface is
+// sampled in the grain's own coordinates and the sky by direction — so there
+// is no seam and no pole anywhere.
+var GLSL_NOISE = [
+  GLSL_HASH,
+  'vec3 grad3(ivec3 c) {',
+  '  uint h = hash(uint(c.x + 0x4000) * 0x9E3779B1u ^ uint(c.y + 0x4000) * 0x85EBCA77u ^ uint(c.z + 0x4000) * 0xC2B2AE3Du);',
+  '  return vec3(float(h & 1023u), float((h >> 10) & 1023u), float((h >> 20) & 1023u)) * (2.0 / 1023.0) - 1.0;',
+  '}',
+  'float gnoise(vec3 p) {',
+  '  vec3 i = floor(p), f = p - i, u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);',
+  '  ivec3 c = ivec3(i);',
+  '  float a = dot(grad3(c), f), b = dot(grad3(c + ivec3(1, 0, 0)), f - vec3(1.0, 0.0, 0.0));',
+  '  float cc = dot(grad3(c + ivec3(0, 1, 0)), f - vec3(0.0, 1.0, 0.0)), d = dot(grad3(c + ivec3(1, 1, 0)), f - vec3(1.0, 1.0, 0.0));',
+  '  float e = dot(grad3(c + ivec3(0, 0, 1)), f - vec3(0.0, 0.0, 1.0)), g = dot(grad3(c + ivec3(1, 0, 1)), f - vec3(1.0, 0.0, 1.0));',
+  '  float hh = dot(grad3(c + ivec3(0, 1, 1)), f - vec3(0.0, 1.0, 1.0)), k = dot(grad3(c + ivec3(1, 1, 1)), f - vec3(1.0, 1.0, 1.0));',
+  '  return mix(mix(mix(a, b, u.x), mix(cc, d, u.x), u.y), mix(mix(e, g, u.x), mix(hh, k, u.x), u.y), u.z);',
+  '}',
+  'float fbm(vec3 p, int oct) {',
+  '  float s = 0.0, a = 0.5;',
+  '  for (int i = 0; i < 6; i++) { if (i >= oct) break; s += a * gnoise(p); p = p * 2.03 + vec3(11.7, 5.3, 7.9); a *= 0.5; }',
+  '  return s;',
+  '}',
+  // craters: a jittered lattice of cells, a bowl in the cells that have one
+  // (a fraction fill of them), each of its own size. The surface cuts the
+  // lattice on a curve, so a bowl is big where the cut passes near its centre
+  // and small or absent where it passes wide: a spread of sizes for free.
+  // Returns the height — the floor down, the rim up — and a mask of the floor.
+  'vec2 craters(vec3 p, float fill) {',
+  '  vec3 i = floor(p), f = p - i;',
+  '  float best = 9.0;',
+  '  for (int z = -1; z <= 1; z++) for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {',
+  '    vec3 g = grad3(ivec3(i) + ivec3(x, y, z)) * 0.5 + 0.5;',
+  '    if (g.z > fill) continue;',
+  '    vec3 r = vec3(float(x), float(y), float(z)) + g * 0.7 + 0.15 - f;',
+  '    float rr = 0.2 + 0.24 * g.y;',
+  '    best = min(best, dot(r, r) / (rr * rr));',
+  '  }',
+  '  float d = sqrt(best);',
+  '  float bowl = d < 1.0 ? -(1.0 - d * d) : 0.0;',
+  '  float rim = smoothstep(0.7, 1.0, d) * (1.0 - smoothstep(1.0, 1.45, d));',
+  '  return vec2(bowl * 0.8 + rim * 0.5, 1.0 - smoothstep(0.8, 1.0, d));',
+  '}'
+].join('\n');
 
 
 // The body, in three screen-space passes — the trick fluid renderers use.
 // 1. Every body-particle is a sphere impostor with per-fragment depth; the
-//    pass keeps its material colour, its heat, and its view-space depth.
-// 2. A bilateral blur one particle wide smooths depth and colour along the
-//    surface but never across a silhouette — the balls melt into a skin.
-// 3. Normals come from the smoothed depth, and the skin is lit by the sun.
+//    pass keeps its material colour, its heat, its view-space depth, and its
+//    home — where it sat in its body when the body was built.
+// 2. A bilateral blur one particle wide smooths depth, colour and home along
+//    the surface but never across a silhouette — the balls melt into a skin,
+//    and the homes into a coordinate field that rides the material.
+// 3. Normals come from the smoothed depth, a surface is drawn in the home
+//    coordinates, and the skin is lit by the sun.
 var G_VS = [
   '#version 300 es',
   'precision highp float;',
@@ -22,6 +72,8 @@ var G_VS = [
   'uniform sampler2D uPos;',
   'uniform sampler2D uVel;',
   'uniform sampler2D uAux;',
+  'uniform sampler2D uHome;',  // xyz — the particle's place in its body's own frame; a sim without one binds a dummy and uHomeOn is 0
+  'uniform float uHomeOn;',
   'uniform ivec2 uSize;',
   'uniform mat4 uView;',
   'uniform mat4 uProj;',
@@ -31,11 +83,13 @@ var G_VS = [
   'uniform float uPx;',
   'uniform float uMaxPt;',
   'uniform float uFat;',
+  'uniform float uMetal[8];',  // which materials are metal, by index — the page says
   GLSL_MATCOL,
   'out float vZc;',
   'out float vR;',
   'out float vNb;',
   'out vec4 vMat;',        // rgb — material, a — temperature
+  'out vec4 vHome;',       // xyz — home, w — metal
   'void main() {',
   '  ivec2 tc = ivec2(gl_VertexID % uSize.x, gl_VertexID / uSize.x);',
   '  vec4 P = texelFetch(uPos, tc, 0);',
@@ -44,6 +98,7 @@ var G_VS = [
   '  vZc = e.z;',
   '  vR = uRad * pow(max(texelFetch(uMat, tc, 0).r, 1e-9), uRadPow) * mix(1.0, uFat, smoothstep(0.0, 6.0, vNb));',    // packed particles run fat, so the skin has no gaps
   '  vMat = vec4(matColor(P.w), texelFetch(uVel, tc, 0).w);',
+  '  vHome = vec4(texelFetch(uHome, tc, 0).xyz * uHomeOn, uMetal[clamp(int(P.w + 0.5), 0, 7)]);',
   '  gl_Position = uProj * e;',
   '  gl_PointSize = clamp(2.1 * vR * uPx / max(-e.z, 0.05), 1.0, uMaxPt);',
   '}'
@@ -58,8 +113,10 @@ var G_FS = [
   'in float vR;',
   'in float vNb;',
   'in vec4 vMat;',
+  'in vec4 vHome;',
   'layout(location = 0) out vec4 oMat;',
   'layout(location = 1) out vec4 oDep;',   // r — view depth, g — neighbours, and in its fraction the coverage: 1 wherever a particle drew
+  'layout(location = 2) out vec4 oHome;',
   'void main() {',
   '  vec2 d = gl_PointCoord * 2.0 - 1.0;',
   '  float r2 = dot(d, d);',
@@ -68,6 +125,7 @@ var G_FS = [
   '  gl_FragDepth = ((uP22 * ze + uP32) / (-ze)) * 0.5 + 0.5;',
   '  oMat = vMat;',
   '  oDep = vec4(-ze, vNb + 0.999, 0.0, 1.0);',
+  '  oHome = vHome;',
   '}'
 ].join('\n');
 
@@ -77,6 +135,7 @@ var BLUR_FS = [
   'precision highp sampler2D;',
   'uniform sampler2D uMat;',
   'uniform sampler2D uDep;',
+  'uniform sampler2D uHome;',
   'uniform ivec2 uDir;',
   'uniform int uTaps;',
   'uniform float uStep;',
@@ -84,6 +143,7 @@ var BLUR_FS = [
   'uniform ivec2 uRes;',
   'layout(location = 0) out vec4 oMat;',
   'layout(location = 1) out vec4 oDep;',
+  'layout(location = 2) out vec4 oHome;',
   'void main() {',
   '  ivec2 me = ivec2(gl_FragCoord.xy);',
   '  vec2 d0 = texelFetch(uDep, me, 0).rg;',
@@ -98,10 +158,10 @@ var BLUR_FS = [
   '    cw += g; cs += g * fract(texelFetch(uDep, c, 0).g);',
   '  }',
   '  float cov = cs / cw * 0.999;',
-  '  if (z0 <= 0.0) { oMat = vec4(0.0); oDep = vec4(0.0, cov, 0.0, 1.0); return; }',
+  '  if (z0 <= 0.0) { oMat = vec4(0.0); oDep = vec4(0.0, cov, 0.0, 1.0); oHome = vec4(0.0); return; }',
   '  float sig = (float(uTaps) * uStep * 0.5 + 0.5) * max(smoothstep(1.0, 5.0, nb), 0.05);',   // loners and small clumps keep their shape
   '  float ws = 0.0, zs = 0.0;',
-  '  vec4 ms = vec4(0.0);',
+  '  vec4 ms = vec4(0.0), hs = vec4(0.0);',
   '  for (int i = -uTaps; i <= uTaps; i++) {',
   '    float x = float(i) * uStep;',
   '    ivec2 c = clamp(me + uDir * int(round(x)), ivec2(0), uRes - 1);',
@@ -109,20 +169,23 @@ var BLUR_FS = [
   '    if (z <= 0.0) continue;',
   '    float dz = (z - z0) / uRange;',
   '    float w = exp(-x * x / (2.0 * sig * sig) - dz * dz);',
-  '    ws += w; zs += w * z; ms += w * texelFetch(uMat, c, 0);',
+  '    ws += w; zs += w * z; ms += w * texelFetch(uMat, c, 0); hs += w * texelFetch(uHome, c, 0);',
   '  }',
   '  oDep = vec4(zs / ws, nb + cov, 0.0, 1.0);',
   '  oMat = ms / ws;',
+  '  oHome = hs / ws;',
   '}'
 ].join('\n');
 
 var SHADE_FS = [
   '#version 300 es',
   'precision highp float;',
+  'precision highp int;',
   'precision highp sampler2D;',
   'uniform sampler2D uMat;',
   'uniform sampler2D uDep;',
   'uniform sampler2D uDepRaw;',  // the depth before the blur: the particles themselves
+  'uniform sampler2D uHome;',    // the smoothed home field: xyz — the grain's own coordinates, w — how much of the material is metal
   'uniform vec2 uInvP;',        // 1/P00, 1/P11
   'uniform vec2 uRes;',
   'uniform vec3 uSunEye;',
@@ -133,15 +196,28 @@ var SHADE_FS = [
   'uniform vec3 uLPos[2];',     // where, in eye space
   'uniform vec3 uLCol[2];',     // the light at their surface
   'uniform float uLR2[2];',     // their radius²
+  'uniform int uLBall[2];',     // the ball each light belongs to, or −1
   'uniform float uReach2;',     // the fall-off, 1/(d²/R² + reach²): inverse-square far off, kept from blowing up close in
+  'uniform float uEmberMax;',   // the knee on the hot bodies\' light, in the sun\'s units
   'uniform float uRad;',        // a particle's radius, to know how many pixels wide one stands here
   'uniform float uEdge;',       // where the silhouette ends, in coverage, and how soft its last pixel is
   'uniform float uEdgeSoft;',
-  'uniform float uDbg;',        // LOOK.dbg: 1 the ember alone, 2 the particle normal, 3 the direction to the first light, 4 the skin normal
+  'uniform float uDbg;',        // LOOK.dbg: 1 the ember alone, 2 the particle normal, 3 the direction to the first light, 4 the skin normal, 5 the home field, 6 the surface tone
   'uniform int uNO;',           // what casts shadows in that light, as balls: the planet, the impactor while it is one, the second body
   'uniform vec4 uOcc[3];',      // centre in eye space, radius
+  'uniform int uNB;',           // the bodies as balls, up to two: centre in eye space, and the radius their skin is drawn at
+  'uniform vec4 uBall[2];',
+  'uniform float uBallK;',      // how far the skin\'s normal is pulled to the ball\'s where the skin is the ball\'s own
+  'uniform float uCut;',        // 1 — the ball\'s silhouette cuts its skin: only while the body is a whole ball, before the impact; after it the skin wears a loose layer of what fell back, which sits above any radius and was peeled
+  'uniform float uDetail;',     // 0 — the flat material; 1 — the surface; 2 — with craters
+  'uniform float uBump;',       // the surface\'s relief, in particle radii
+  'uniform float uFull;',       // 1 — the full look: specular, the wrap at the terminator, a cool fill; 0 — the plain one
   'out vec4 o;',
   GLSL_GLOW,
+  GLSL_NOISE,
+  // a normal from a vector that might be nothing — the alternative, when it is;
+  // one NaN in the picture is a black rectangle once the bloom has blurred it
+  'vec3 safeNorm(vec3 v, vec3 alt) { float l = dot(v, v); return (l > 1e-16 && !any(isnan(v))) ? v * inversesqrt(l) : alt; }',
   // how much of the light at L, a ball of radius R, reaches p: the run from
   // p to the ball's surface against each occluder — the light's own ball
   // aside, and a ball behind p (away from the light) aside — with a soft edge
@@ -182,6 +258,21 @@ var SHADE_FS = [
   '  vec3 n = edge ? normalize(vec3(float(!hr) - float(!hl), float(!hu) - float(!hd), 0.3)) : normalize(cross(dx, dy));',
   '  return n.z < 0.0 ? -n : n;',
   '}',
+  // the surface, in the grain's own coordinates: continents and hills from
+  // the noise, craters on top — a height for the relief, a tone for the
+  // albedo (0 in the lowlands, 1 on the highlands), the crater floors, and
+  // a crack pattern for the crust a magma ocean wears
+  'void surface(vec3 q, out float h, out float tone, out float floors, out float crack) {',
+  '  int oct = uDetail > 1.5 ? 4 : 3;',
+  '  float cont = fbm(q * 1.7, oct);',
+  '  float det = fbm(q * 6.5 + 3.1, oct - 1);',
+  '  vec2 c = vec2(0.0);',
+  '  if (uDetail > 1.5) c = craters(q * 3.0, 0.5) + 0.55 * craters(q * 8.0 + 7.0, 0.6);',
+  '  h = cont + det * 0.4 + c.x * 0.35;',
+  '  tone = clamp(0.5 + cont * 1.4 + det * 0.45 + c.x * 0.5, 0.0, 1.0);',
+  '  floors = clamp(c.y, 0.0, 1.0);',
+  '  crack = 1.0 - smoothstep(0.0, 0.12, abs(fbm(q * 8.0 + 21.0, 3)));',
+  '}',
   'void main() {',
   '  ivec2 me = ivec2(gl_FragCoord.xy);',
   '  vec2 d = texelFetch(uDep, me, 0).rg;',
@@ -199,41 +290,164 @@ var SHADE_FS = [
   '  float dpx = uRad * uRes.x / (uInvP.x * z);',                                                // this particle, across, in pixels
   '  float cut = mix(0.35, uEdge, smoothstep(2.0, 6.0, floor(d.g))) * smoothstep(2.5, 6.0, dpx);',
   '  float alpha = smoothstep(cut - uEdgeSoft, cut + uEdgeSoft, fract(d.g));',
-  '  if (alpha <= 0.0) discard;',
   '  vec3 p = posAt(uDep, me);',
+  '  vec3 ray = normalize(p);',
   '  bool edge, edgeR;',
   '  vec3 n = normalAt(uDep, me, p, edge);',                            // the skin's
   '  vec3 nR = normalAt(uDepRaw, me, posAt(uDepRaw, me), edgeR);',      // the particle's own: honest at a silhouette, where the smoothed skin's turns any way
   '  vec4 m = texelFetch(uMat, me, 0);',
-  '  float lit = 0.12 + 0.88 * max(0.0, dot(n, uSunEye));',
-  '  lit *= 0.7 + 0.3 * n.z;',                       // the limb turns away
-  '  float molten = smoothstep(1300.0, 2100.0, m.a);',                            // past the melting point the crust is gone: dark rock, lit by itself
-  '  vec3 alb = mix(m.rgb, m.rgb * 0.25 + vec3(0.05, 0.03, 0.02), molten);',
-  // the hot bodies' light on everything else — the disk in the planet's
-  // glow — by the skin's normal or the particle's, whichever faces the light
-  // less: along a silhouette the smoothed skin's normal is noise, and this
-  // light is twenty times the sun's, so the noise would be a bright rim
+  '  vec4 hm = texelFetch(uHome, me, 0);',
+  '  float metal = clamp(hm.w, 0.0, 1.0);',
+  // whether the home field is a surface here. On rock that holds together
+  // the field moves across the screen as the skin does — a pixel's step in
+  // home is a pixel's step in space — and a texture drawn in it stands
+  // still on the rock. Where the material churns, a magma ocean convecting
+  // at the grain scale or two bodies' grains mixed at the contact, the
+  // field jumps from pixel to pixel and shifts from frame to frame, and a
+  // texture drawn in it shimmers. So the surface fades out where the
+  // field's gradient outruns the skin's own, and the melt there is drawn
+  // smooth — which is what a churning melt is
+  '  vec3 fw = fwidth(hm.xyz), fp = fwidth(p);',
+  '  float coh = 1.0 - smoothstep(2.5, 6.0, length(fw) / max(length(fp), 1e-7));',
+  // the balls. Where the skin is a body's own — within a few particles of the
+  // radius its skin is drawn at, and facing the way the ball's surface faces
+  // there — the body is known to be round, and the skin's normal is a noisy
+  // estimate of that: it is pulled toward the ball's, all the way on a
+  // silhouette where the estimate is nothing. And the ball's silhouette is
+  // exact where the coverage cut's is a staircase of discs: the ray's
+  // closest approach to the centre against the radius, feathered over a
+  // pixel — but only while the body is a whole ball, on the approach.
+  // After the impact the skin wears what fell back on it, a loose layer
+  // that sits above any radius the analysis can name, and a cut at that
+  // radius peeled the layer off as a glowing rind with a black gap under
+  // it. The facing test keeps another body's skin out of both: the
+  // impactor crossing the planet's shell on its way in faces its own
+  // centre, not the planet's, and is neither pulled nor cut; nor is a
+  // droplet two particles up, nor the arm
+  '  float onBall = 0.0; vec3 nBall = n;',
+  '  float selfB[2]; selfB[0] = 0.0; selfB[1] = 0.0;',   // how much this pixel is each ball's own skin, for the ball's light to leave alone
+  '  vec3 nA = (edge || edgeR) ? nR : n;',
+  '  for (int i = 0; i < 2; i++) if (i < uNB) {',
+  '    vec3 c = p - uBall[i].xyz; float r = length(c), R = uBall[i].w;',
+  '    vec3 nb0 = c / max(r, 1e-6);',
+  '    float agree = smoothstep(0.35, 0.7, dot(nA, nb0));',
+  '    float w = (1.0 - smoothstep(0.05 * R, 0.14 * R, abs(r - R))) * agree;',
+  '    selfB[i] = (1.0 - smoothstep(3.0 * uRad, 8.0 * uRad, abs(r - R))) * agree;',
+  '    if (w > onBall) { onBall = w; nBall = nb0; }',
+  '    if (uCut > 0.5 && abs(r - R) < 1.5 * uRad && agree > 0.5) {',
+  '      float b = length(uBall[i].xyz - ray * dot(uBall[i].xyz, ray));',
+  '      float pxw = -uBall[i].z * uInvP.x * 2.0 / uRes.x;',
+  '      alpha = min(alpha, 1.0 - smoothstep(R - pxw, R + pxw, b));',
+  '    }',
+  '  }',
+  '  float pull = onBall * ((edge || edgeR) ? 1.0 : uBallK);',
+  '  n = safeNorm(mix(n, nBall, pull), n);',
+  '  nR = safeNorm(mix(nR, nBall, pull), nR);',
+  '  bool rim = (edge || edgeR) && onBall < 0.5;',
+  // the surface, and its relief: the height's slope across the screen, from
+  // the derivatives the hardware keeps, tilts the normal — bump mapping with
+  // no parametrisation (Mikkelsen) — with a cap on the tilt where the home
+  // field jumps between grains of different origin, and none across a step
+  '  float h = 0.0, tone = 0.5, floors = 0.0, crack = 0.0;',
+  '  if (uDetail > 0.5) surface(hm.xyz, h, tone, floors, crack);',
+  '  tone = mix(0.5, tone, coh); floors *= coh; crack *= coh;',
+  '  float hh = h * uRad * uBump * coh;',
+  '  vec3 dpx_ = dFdx(p), dpy_ = dFdy(p);',
+  '  float dhx = dFdx(hh), dhy = dFdy(hh);',
+  '  if (uDetail > 0.5 && !edge) {',
+  '    float jump = z * 12.0 * uInvP.x / uRes.x;',
+  '    vec3 r1 = cross(dpy_, n), r2 = cross(n, dpx_);',
+  '    float det = dot(dpx_, r1);',
+  '    vec3 gv = sign(det) * (dhx * r1 + dhy * r2);',
+  '    float gl = length(gv), lim = abs(det) * 1.8;',
+  '    if (gl > lim) gv *= lim / gl;',
+  '    vec3 nb = abs(det) * n - gv;',
+  '    if (dot(dpx_, dpx_) + dot(dpy_, dpy_) < jump * jump * 4.0 && abs(det) > 1e-12 && !any(isnan(nb))) n = safeNorm(nb, n);',
+  '  }',
+  '  if (alpha <= 0.0) discard;',
+  // the material: the palette's colour, darker and deeper in the lowlands,
+  // pale on the highlands; past the melting point the crust is gone — dark
+  // rock, lit by itself — and a crust on its way there chars first
+  '  float molten = smoothstep(1300.0, 2100.0, m.a), warm = smoothstep(700.0, 1300.0, m.a);',
+  '  vec3 base = m.rgb;',
+  '  float lum = dot(base, vec3(0.3, 0.59, 0.11));',
+  '  vec3 low = mix(vec3(lum), base, 1.45) * 0.5, high = mix(vec3(lum), base, 0.45) * 1.35;',
+  '  vec3 alb = uDetail > 0.5 ? mix(low, high, tone) * (1.0 - 0.3 * floors) : base;',
+  '  alb = mix(alb, alb * 0.3 + vec3(0.03, 0.015, 0.01), max(molten, 0.5 * warm));',
+  '  alb *= 1.0 - 0.6 * metal;',
+  // the sun: Lambert with a little wrap at the terminator and a cool fill
+  // for the night side — no shadow of one ball on the other: the balls are
+  // where the mass is, not where the skin is, and a body half into the
+  // planet was standing in the planet's shadow from the inside; the hot
+  // bodies' light on everything else — the disk in the planet's glow — by
+  // the skin's normal or the particle's, whichever faces the light less:
+  // along a silhouette the smoothed skin's normal is noise, and this light
+  // is twenty times the sun's, so the noise would be a bright rim
+  '  vec3 V = -ray;',
+  '  float NoV = max(dot(n, V), 1e-3), NoL = dot(n, uSunEye);',
+  '  float wrap = 0.06 * uFull;',
+  '  float diff = clamp((NoL + wrap) / (1.0 + wrap), 0.0, 1.0);',
+  '  vec3 sunC = vec3(1.0, 0.97, 0.92) * 0.9;',
+  '  vec3 amb = mix(vec3(0.12), vec3(0.055, 0.07, 0.10) * (0.75 + 0.25 * n.y), uFull);',
+  // A hot moonlet a few radii off outshines the sun on the planet's night
+  // side by the inverse square, and its light ended in a hard terminator,
+  // so the planet read as three zones — sunlit, moonlit, its own glow —
+  // with seams between them. So a body's light wraps past its terminator,
+  // as a light with a size does, and runs into a soft knee that lets it
+  // outshine the sun by so much and no more: the seams go, the fill stays
+  // A body's light leaves the body's own skin alone — convex, it cannot
+  // light itself, and the loose grains lying on it would sparkle. Which
+  // skin is its own is the ball's: the pixels within a few particles of
+  // the ball's radius that face the way the ball faces there. It used to
+  // be a sphere round the light instead, everything nearer than the
+  // light's radius, and while two bodies were one group in contact that
+  // sphere cut across the second body as a flat zone with a hard edge.
+  // The sphere remains for a light with no ball to its name
   '  vec3 ember = vec3(0.0);',
-  '  for (int i = 0; i < 2; i++) if (i < uNL && !edge && !edgeR) {',
+  '  float ew = 0.35 * uFull;',
+  '  for (int i = 0; i < 2; i++) if (i < uNL && !rim) {',
   '    vec3 l = uLPos[i] - p;',
   '    float d2 = dot(l, l) / uLR2[i];',
   '    vec3 lh = normalize(l);',
-  '    ember += uLCol[i] * min(max(0.0, dot(n, lh)), max(0.0, dot(nR, lh))) / (d2 + uReach2) * smoothstep(1.0, 2.0, d2) * shadow(p, uLPos[i], sqrt(uLR2[i]));',   // and not the body's own skin: convex, it cannot light itself
+  '    float face = min(dot(n, lh), dot(nR, lh));',
+  '    float own = uLBall[i] >= 0 ? 1.0 - selfB[uLBall[i]] : smoothstep(1.0, 3.0, d2);',
+  '    ember += uLCol[i] * clamp((face + ew) / (1.0 + ew), 0.0, 1.0) / (d2 + uReach2) * own * shadow(p, uLPos[i], sqrt(uLR2[i]));',
   '  }',
+  '  ember = mix(ember, ember / (1.0 + ember / uEmberMax), uFull);',
+  '  vec3 col = alb * (diff * sunC + amb + ember);',
+  // the sun's glint: GGX, rough on the crust, glossy on the magma, and the
+  // metals reflecting in their own colour
+  '  float rough = mix(mix(0.85, 0.3, molten), 0.45, metal);',
+  '  vec3 H = safeNorm(uSunEye + V, n);',
+  '  float NoH = max(dot(n, H), 0.0), VoH = clamp(dot(V, H), 0.0, 1.0), NoLc = max(NoL, 0.0), a2 = rough * rough * rough * rough;',
+  '  float Dg = a2 / (3.14159 * pow(NoH * NoH * (a2 - 1.0) + 1.0, 2.0));',
+  '  float Vis = 0.5 / max(NoLc * sqrt(NoV * NoV * (1.0 - a2) + a2) + NoV * sqrt(NoLc * NoLc * (1.0 - a2) + a2), 1e-4);',
+  '  vec3 F0 = mix(vec3(0.04), base, metal);',
+  '  vec3 F = F0 + (1.0 - F0) * pow(1.0 - VoH, 5.0);',
+  '  col += uFull * Dg * Vis * F * NoLc * sunC;',
+  // its own light: the glow by temperature, and on a magma ocean the crust it
+  // wears — dark plates, the melt bright in the cracks between them; a crust
+  // only warm shows the same cracks in red. The vapour, past a few thousand
+  // kelvin, has no crust to wear
+  '  float plates = molten * (1.0 - smoothstep(6000.0, 16000.0, m.a));',
+  '  float em = uDetail > 0.5 ? mix(1.0, 0.3 + 1.7 * crack, max(plates * 0.9, warm * (1.0 - molten) * 0.7)) : 1.0;',
+  '  vec3 emis = glow(m.a) * uGlow * em;',
   '  gl_FragDepth = ((uP22 * (-z) + uP32) / z) * 0.5 + 0.5;',
-  '  if (uDbg > 0.5) { vec3 lh0 = normalize(uLPos[0] - p); o = vec4(uDbg < 1.5 ? ember : uDbg < 2.5 ? nR * 0.5 + 0.5 : uDbg < 3.5 ? lh0 * 0.5 + 0.5 : n * 0.5 + 0.5, 1.0); return; }',
-  '  o = vec4(alb * (lit + ember) + glow(m.a) * uGlow, alpha);',
+  '  if (uDbg > 0.5) { vec3 lh0 = normalize(uLPos[0] - p); o = vec4(uDbg < 1.5 ? ember : uDbg < 2.5 ? nR * 0.5 + 0.5 : uDbg < 3.5 ? lh0 * 0.5 + 0.5 : uDbg < 4.5 ? n * 0.5 + 0.5 : uDbg < 5.5 ? fract(hm.xyz) : vec3(tone), 1.0); return; }',
+  '  o = vec4(col + emis, alpha);',
   '}'
 ].join('\n');
 
+
 // 4. Bloom: what is brighter than white — the glow, the hottest sparks —
 //    taken at a quarter of the size and blurred twice over, a narrow halo
-//    and a wide one, then laid back over the picture.
+//    and a wide one, then at a sixteenth for the widest, and laid back over
+//    the picture.
 var BRIGHT_FS = [
   '#version 300 es',
   'precision highp float;',
   'uniform sampler2D uHdr;',
-  'uniform vec2 uInvRes;',       // of the canvas
+  'uniform vec2 uInvRes;',       // of the source
   'uniform float uThr;',
   'out vec4 o;',
   'void main() {',
@@ -265,29 +479,70 @@ var BLOOM_FS = [
   '}'
 ].join('\n');
 
-// the sun: a disk where SUN is, with a glare round it, drawn into the HDR
-// canvas behind everything so the bodies hide it; the bloom does the rest
+// the sky behind the stars: the Milky Way, where it really is. The stars sit
+// in equatorial coordinates, so the galactic plane is a fixed great circle
+// among them — its pole at RA 192.86°, Dec +27.13°, its centre at RA 266.41°,
+// Dec −28.94° — and the band is drawn about that circle: brightest and
+// widest toward the centre, thinning toward the anticentre, mottled with
+// star clouds and cut by dust lanes along the plane. Drawn at a quarter of
+// the size, since it is soft, and the sun pass lays it under everything.
+var SKY_FS = [
+  '#version 300 es',
+  'precision highp float;',
+  'precision highp int;',
+  'uniform vec2 uRes;',
+  'uniform vec2 uInvP;',
+  'uniform mat3 uInvRot;',      // eye to world
+  'uniform vec3 uNGP;',         // the galactic pole, and in the plane: toward the centre, and 90° on
+  'uniform vec3 uGX;',
+  'uniform vec3 uGY;',
+  'uniform float uMw;',
+  'out vec4 o;',
+  GLSL_NOISE,
+  'void main() {',
+  '  vec2 ndc = gl_FragCoord.xy / uRes * 2.0 - 1.0;',
+  '  vec3 d = uInvRot * normalize(vec3(ndc * uInvP, -1.0));',
+  '  float b = asin(clamp(dot(d, uNGP), -1.0, 1.0));',
+  '  float l = atan(dot(d, uGY), dot(d, uGX));',
+  '  float toward = exp(-l * l / 1.6);',
+  '  float band = 0.5 * exp(-b * b / (0.008 + 0.01 * toward)) + 0.5 * exp(-b * b / (0.05 + 0.06 * toward));',
+  '  float bulge = 0.3 + 0.7 * toward;',
+  '  float clouds = 0.55 + 0.9 * (0.5 + 0.5 * fbm(d * 7.0, 4));',
+  '  float dust = smoothstep(0.05, 0.4, fbm(d * 11.0 + 5.0, 4)) * exp(-b * b / 0.006);',
+  '  float mw = band * bulge * clouds * (1.0 - 0.85 * dust);',
+  '  o = vec4(vec3(1.0, 0.92, 0.8) * mw * uMw, 1.0);',
+  '}'
+].join('\n');
+
+// the sun: a disk where SUN is, with a glare round it, and the sky under it,
+// drawn into the HDR canvas behind everything so the bodies hide it; the
+// bloom does the rest
 var SUN_FS = [
   '#version 300 es',
   'precision highp float;',
+  'uniform sampler2D uSky;',
+  'uniform vec2 uInvRes;',      // of the canvas
   'uniform vec2 uRes;',
   'uniform vec2 uInvP;',
   'uniform vec3 uSunEye;',
   'uniform float uSunR;',       // the disk's angular radius, radians
-  'uniform float uSunI;',
+  'uniform float uSunI;',       // its brightness — 0 when it is behind the camera
   'uniform float uHalo;',
   'out vec4 o;',
   'void main() {',
+  '  vec3 c = texture(uSky, gl_FragCoord.xy * uInvRes).rgb;',
   '  vec2 ndc = gl_FragCoord.xy / uRes * 2.0 - 1.0;',
   '  vec3 ray = normalize(vec3(ndc * uInvP, -1.0));',
-  '  if (dot(ray, uSunEye) < 0.7) discard;',
-  '  float th = 2.0 * asin(min(0.5 * length(ray - uSunEye), 1.0));',   // the angle off the sun's centre, exact where it is small
-  '  float px = uInvP.y * 2.0 / uRes.y;',                               // one pixel in radians
-  '  float disk = 1.0 - smoothstep(uSunR - px, uSunR + px, th);',
-  '  float x = max(th - uSunR, 0.0);',
-  '  float halo = uHalo * (0.6 * exp(-x / (2.0 * uSunR)) + 0.12 * exp(-x / 0.05) + 0.02 * exp(-x / 0.3));',
+  '  if (uSunI > 0.0 && dot(ray, uSunEye) > 0.7) {',
+  '    float th = 2.0 * asin(min(0.5 * length(ray - uSunEye), 1.0));',   // the angle off the sun's centre, exact where it is small
+  '    float px = uInvP.y * 2.0 / uRes.y;',                               // one pixel in radians
+  '    float disk = 1.0 - smoothstep(uSunR - px, uSunR + px, th);',
+  '    float x = max(th - uSunR, 0.0);',
+  '    float halo = uHalo * (0.6 * exp(-x / (2.0 * uSunR)) + 0.12 * exp(-x / 0.05) + 0.02 * exp(-x / 0.3));',
+  '    c += vec3(1.0, 0.96, 0.88) * (disk * uSunI) + vec3(1.0, 0.8, 0.55) * halo;',
+  '  }',
   '  gl_FragDepth = 0.9999;',
-  '  o = vec4(vec3(1.0, 0.96, 0.88) * (disk * uSunI) + vec3(1.0, 0.8, 0.55) * halo, 1.0);',
+  '  o = vec4(c, 1.0);',
   '}'
 ].join('\n');
 
@@ -296,11 +551,14 @@ var TONE_FS = [
   'precision highp float;',
   'uniform sampler2D uHdr;',
   'uniform sampler2D uBloom;',
+  'uniform sampler2D uBloom2;',
   'uniform vec2 uInvRes;',
   'uniform float uBloomK;',
+  'uniform float uBloomK2;',
   'uniform float uExposure;',
   'uniform float uFilmic;',
   'uniform float uVig;',
+  'uniform float uSat;',
   'uniform float uDbg;',
   'out vec4 o;',
   // the ACES fit (Narkowicz): a toe that keeps the shadows dark and a
@@ -309,11 +567,13 @@ var TONE_FS = [
   'void main() {',
   '  vec3 c = texelFetch(uHdr, ivec2(gl_FragCoord.xy), 0).rgb;',
   '  if (uDbg > 0.5) { o = vec4(vec3(fract(c.r * 4.0)) * step(0.001, c.r), 1.0); return; }',
-  '  c += texture(uBloom, gl_FragCoord.xy * uInvRes).rgb * uBloomK;',
-  '  vec2 q = gl_FragCoord.xy * uInvRes - 0.5;',
+  '  vec2 uv = gl_FragCoord.xy * uInvRes;',
+  '  c += texture(uBloom, uv).rgb * uBloomK + texture(uBloom2, uv).rgb * uBloomK2;',
+  '  vec2 q = uv - 0.5;',
   '  float vig = 1.0 - uVig * pow(dot(q, q) * 2.0, 1.1);',             // the corners are 1 − uVig, the centre untouched
   '  c *= uExposure * vig;',
   '  c = uFilmic > 0.0 ? aces(c * uFilmic) : pow(vec3(1.0) - exp(-c), vec3(0.92));',
+  '  c = mix(vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))), c, uSat);',
   '  o = vec4(vec3(0.016, 0.024, 0.04) * vig + c, 1.0);',
   '}'
 ].join('\n');
@@ -352,8 +612,9 @@ var FXAA_FS = [
 ].join('\n');
 
 
+G.GLSL_NOISE = GLSL_NOISE;
 G.G_VS = G_VS; G.G_FS = G_FS; G.BLUR_FS = BLUR_FS; G.SHADE_FS = SHADE_FS;
-G.BRIGHT_FS = BRIGHT_FS; G.BLOOM_FS = BLOOM_FS; G.SUN_FS = SUN_FS;
+G.BRIGHT_FS = BRIGHT_FS; G.BLOOM_FS = BLOOM_FS; G.SKY_FS = SKY_FS; G.SUN_FS = SUN_FS;
 G.TONE_FS = TONE_FS; G.FXAA_FS = FXAA_FS;
 
 })();

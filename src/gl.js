@@ -83,27 +83,32 @@ function freeGrid(g) {
 }
 
 // ---------- screen-sized targets ----------
-// material + depth pairs for the body passes, and the HDR canvas everything
-// is composed into before tone mapping
+// material + depth + home triples for the body passes, and the HDR canvas
+// everything is composed into before tone mapping
 function screenTarget(w, h, withDepth) {
-  var t = { fbo: gl.createFramebuffer(), mat: floatTex(w, h, null, gl.RGBA16F, gl.HALF_FLOAT), dep: floatTex(w, h, null, gl.RG32F, gl.FLOAT, gl.RG), rb: null };
+  // the home field in full floats: close in, a pixel's step in it is a
+  // quarter of a half-float's quantum, and the relief, which is its screen
+  // derivative, came out as terraces
+  var t = { fbo: gl.createFramebuffer(), mat: floatTex(w, h, null, gl.RGBA16F, gl.HALF_FLOAT), dep: floatTex(w, h, null, gl.RG32F, gl.FLOAT, gl.RG),
+            home: floatTex(w, h, null), rb: null };
   gl.bindFramebuffer(gl.FRAMEBUFFER, t.fbo);
   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t.mat, 0);
   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, t.dep, 0);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT2, gl.TEXTURE_2D, t.home, 0);
   if (withDepth) {
     t.rb = gl.createRenderbuffer();
     gl.bindRenderbuffer(gl.RENDERBUFFER, t.rb);
     gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, w, h);
     gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, t.rb);
   }
-  gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+  gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2]);
   if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error('screen framebuffer incomplete');
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   return t;
 }
 function freeScreen(t) {
   if (!t) return;
-  gl.deleteTexture(t.mat); gl.deleteTexture(t.dep); gl.deleteFramebuffer(t.fbo);
+  gl.deleteTexture(t.mat); gl.deleteTexture(t.dep); gl.deleteTexture(t.home); gl.deleteFramebuffer(t.fbo);
   if (t.rb) gl.deleteRenderbuffer(t.rb);
 }
 // the bloom's pair, a quarter of the canvas each way, filtered so the taps

@@ -6,7 +6,7 @@
 'use strict';
 var CC = window.CC || (window.CC = {});
 var gl = null, canvas = null, S = null, sim = null, report = null;
-var gProg, blurProg, shadeProg, sunProg, brightProg, bloomProg, toneProg, fxaaProg, starProg;
+var gProg, blurProg, shadeProg, sunProg, brightProg, bloomProg, toneProg, fxaaProg, starProg, skyProg;
 var vao = null, starVao = null, STAR_COUNT = 0, MAX_POINT = 0;
 // A particle drawn at its own size is right when everything is at the same
 // distance from the camera. It is not right when a few motes come between the
@@ -14,7 +14,18 @@ var vao = null, starVao = null, STAR_COUNT = 0, MAX_POINT = 0;
 // cap what one is allowed to cover.
 var maxPoint = 0, radPow = 0;
 var pal = new Float32Array(24);   // eight materials, this scenario's
+// the look a page asks for on top of the shared one: whether its bodies are
+// balls — round enough to take the ball's normal and silhouette — which of
+// its materials are metal, and how much surface to draw on the skin: 0 the
+// flat material, 1 the noise, 2 with craters
+var LK = { balls: false, detail: 0, metal: new Float32Array(8) };
+var dummyHome = null;             // for a sim whose particles have no home
 var lastLights = null;
+// the hot bodies' lights, eased: the report that places them comes every
+// few dozen frames, and a light that jumps with it pulses on everything it
+// lights. Where it sits (as an offset from the body's centre, which the
+// drift carries), how big it is, what colour
+var lightSmooth = [], lightGen = -1;
 var DEV = CC.dev, LOOK = CC.look, FOV = CC.FOV, glowCol = CC.glowCol, run = CC.run;
 var BLUR_PASSES = DEV.BLUR_PASSES, DPR_CAP = DEV.DPR_CAP;
 var MATH = CC.math, perspective = MATH.perspective, lookAt = MATH.lookAt, mul = MATH.mul;
@@ -22,8 +33,16 @@ var GLH = CC.gl, floatTex, screenTarget, freeScreen, bloomTarget;
 CC.onSim(function (s) { sim = s; });
 CC.onReport(function (r) { report = r; });
 
+// the galactic frame, in the stars' equatorial one: the north galactic pole
+// and the centre (J2000), from which the plane's own axes follow
+function radec(ra, dec) { var r = ra * Math.PI / 180, d = dec * Math.PI / 180, c = Math.cos(d); return [c * Math.cos(r), Math.sin(d), c * Math.sin(r)]; }
+var NGP = radec(192.8595, 27.1284), GC = radec(266.4051, -28.9362);
+var GX = (function () { var k = NGP[0] * GC[0] + NGP[1] * GC[1] + NGP[2] * GC[2], v = [GC[0] - NGP[0] * k, GC[1] - NGP[1] * k, GC[2] - NGP[2] * k], l = Math.hypot(v[0], v[1], v[2]); return [v[0] / l, v[1] / l, v[2] / l]; })();
+var GY = [NGP[1] * GX[2] - NGP[2] * GX[1], NGP[2] * GX[0] - NGP[0] * GX[2], NGP[0] * GX[1] - NGP[1] * GX[0]];
+
 // ---------- screen-sized targets ----------
-var gbuf = null, blurA = null, blurB = null, bloomA = null, bloomB = null, bloomW = 0, bloomH = 0, ldr = null;
+var gbuf = null, blurA = null, blurB = null, bloomA = null, bloomB = null, bloomC = null, bloomD = null, skyT = null;
+var bloomW = 0, bloomH = 0, bloom2W = 0, bloom2H = 0, ldr = null;
 var hdr = { fbo: null, tex: null, depth: null, w: 0, h: 0 };   // the context arrives at init(), which fills these
 // The picture is drawn at this much of a side on top of the pixel-ratio cap.
 // A phone that starts at sixty does not stay there — it warms, and ten minutes
@@ -41,6 +60,7 @@ function governQuality(now, fps) {
   else { easyRuns = 0; return; }
   renderScale = RENDER_SCALES[scaleIdx];
 }
+function freeBloom(t) { if (t) { gl.deleteTexture(t.tex); gl.deleteFramebuffer(t.fbo); } }
 function resize() {
   var dpr = Math.min(window.devicePixelRatio || 1, DPR_CAP) * renderScale;
   var w = Math.max(1, Math.round(canvas.clientWidth * dpr)), h = Math.max(1, Math.round(canvas.clientHeight * dpr));
@@ -52,10 +72,12 @@ function resize() {
   hdr.tex = floatTex(w, h, null, gl.RGBA16F, gl.HALF_FLOAT);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);   // the bloom's bright pass reads it between texels
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  if (bloomA) { gl.deleteTexture(bloomA.tex); gl.deleteFramebuffer(bloomA.fbo); gl.deleteTexture(bloomB.tex); gl.deleteFramebuffer(bloomB.fbo); }
-  if (ldr) { gl.deleteTexture(ldr.tex); gl.deleteFramebuffer(ldr.fbo); }
+  freeBloom(bloomA); freeBloom(bloomB); freeBloom(bloomC); freeBloom(bloomD); freeBloom(skyT); freeBloom(ldr);
   bloomW = Math.ceil(w / 4); bloomH = Math.ceil(h / 4);
+  bloom2W = Math.ceil(w / 16); bloom2H = Math.ceil(h / 16);
   bloomA = bloomTarget(bloomW, bloomH); bloomB = bloomTarget(bloomW, bloomH);
+  bloomC = bloomTarget(bloom2W, bloom2H); bloomD = bloomTarget(bloom2W, bloom2H);
+  skyT = bloomTarget(bloomW, bloomH);
   ldr = bloomTarget(w, h, true);
   gl.bindFramebuffer(gl.FRAMEBUFFER, hdr.fbo);
   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, hdr.tex, 0);
@@ -116,6 +138,7 @@ function wireCamera() {
 var SUN = (function () { var v = [-0.6, 0.45, 0.6], l = Math.hypot(v[0], v[1], v[2]); return [v[0] / l, v[1] / l, v[2] / l]; })();
 function render() {
   var w = hdr.w, h = hdr.h;
+  var full = S.shade !== false;   // the page's shading switch: the full look, or the plain one to read the run by
   var goal = (S.follow && sim) ? sim.com1 : [0, 0, 0];
   for (var i = 0; i < 3; i++) camPos[i] += (goal[i] - camPos[i]) * 0.08;
   var cy = Math.cos(cam.pitch), sy = Math.sin(cam.pitch);
@@ -128,9 +151,14 @@ function render() {
     view[0] * SUN[0] + view[4] * SUN[1] + view[8] * SUN[2],
     view[1] * SUN[0] + view[5] * SUN[1] + view[9] * SUN[2],
     view[2] * SUN[0] + view[6] * SUN[1] + view[10] * SUN[2]];
+  // eye to world, for the sky: the view's rotation, turned round
+  var invRot = [view[0], view[4], view[8], view[1], view[5], view[9], view[2], view[6], view[10]];
+  var toEye = function (x, y, z) {
+    return [view[0] * x + view[4] * y + view[8] * z + view[12], view[1] * x + view[5] * y + view[9] * z + view[13], view[2] * x + view[6] * y + view[10] * z + view[14]];
+  };
 
   if (sim) {
-    // 1. the bodies as sphere impostors: material, heat, depth
+    // 1. the bodies as sphere impostors: material, heat, depth, home
     var g = gProg.u;
     gl.bindFramebuffer(gl.FRAMEBUFFER, gbuf.fbo);
     gl.viewport(0, 0, w, h);
@@ -145,11 +173,14 @@ function render() {
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, sim.src.vel);
     gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, sim.src.aux);
     gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, sim.mat);
+    gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, sim.home || dummyHome);
     gl.uniform1i(g.uPos, 0); gl.uniform1i(g.uVel, 1); gl.uniform1i(g.uAux, 2);
     gl.uniform2i(g.uSize, sim.W, sim.H);
     gl.uniformMatrix4fv(g.uView, false, view);
     gl.uniformMatrix4fv(g.uProj, false, proj);
     gl.uniform1i(g.uMat, 3);
+    gl.uniform1i(g.uHome, 4); gl.uniform1f(g.uHomeOn, sim.home && full && LK.detail > 0 ? 1 : 0);
+    gl.uniform1fv(g['uMetal[0]'], LK.metal);
     gl.uniform1f(g.uRadPow, radPow);
     gl.uniform1f(g.uRad, sim.a);
     gl.uniform1f(g.uPx, px);
@@ -160,30 +191,112 @@ function render() {
     gl.uniform3fv(g['uPal[0]'], pal);
     gl.drawArrays(gl.POINTS, 0, sim.N);
 
-    // 2. bilateral blur, two particles wide, x then y, twice over
+    // 2. bilateral blur, two particles wide, x then y, twice over. A tap a
+    //    pixel up to twelve; past that the taps spread. Close in — a
+    //    particle sixty pixels across, the taps five apart — the comb of
+    //    them showed through the skin as stripes: the raw depth steps at
+    //    every disc's edge, each tap crossing an edge is a step in the sum,
+    //    and the normal, a difference of neighbours, blinks with the comb's
+    //    period. So a coarse comb is preceded by a dense pass, a tap a
+    //    pixel over the comb's own spacing, that turns the edges into ramps
+    //    the comb can cross smoothly
     var rpx = sim.a * px / cam.dist * 2.0;
     var taps = Math.max(1, Math.min(12, Math.round(rpx)));
+    var step = Math.max(1, rpx / taps), pre = step > 1.5 ? Math.ceil(step) : 0;
     var b = blurProg.u;
     gl.disable(gl.DEPTH_TEST);
     gl.useProgram(blurProg.p);
-    gl.uniform1i(b.uMat, 0); gl.uniform1i(b.uDep, 1);
-    gl.uniform1i(b.uTaps, taps);
-    gl.uniform1f(b.uStep, Math.max(1, rpx / taps));
+    gl.uniform1i(b.uMat, 0); gl.uniform1i(b.uDep, 1); gl.uniform1i(b.uHome, 2);
     gl.uniform1f(b.uRange, 4.0 * sim.a);
     gl.uniform2i(b.uRes, w, h);
-    var from = gbuf, ping = [blurA, blurB];
-    for (var pass = 0; pass < BLUR_PASSES; pass++) {
+    var from = gbuf, ping = [blurA, blurB], passes = [];
+    if (pre) passes.push([pre, 1], [pre, 1]);
+    for (var k = 0; k < BLUR_PASSES; k++) passes.push([taps, step]);
+    for (var pass = 0; pass < passes.length; pass++) {
       var to = ping[pass & 1];
       gl.bindFramebuffer(gl.FRAMEBUFFER, to.fbo);
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, from.mat);
       gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, from.dep);
+      gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, from.home);
+      gl.uniform1i(b.uTaps, passes[pass][0]);
+      gl.uniform1f(b.uStep, passes[pass][1]);
       gl.uniform2i(b.uDir, 1 - (pass & 1), pass & 1);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       from = to;
     }
   }
 
-  // 3. compose: the lit skin, then the stars over it
+  // the sky, at a quarter of the size: the band is soft, and the noise it
+  // is made of would cost at full
+  gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, skyT.fbo);
+  gl.viewport(0, 0, bloomW, bloomH);
+  var sk = skyProg.u;
+  gl.useProgram(skyProg.p);
+  gl.uniform2f(sk.uRes, bloomW, bloomH);
+  gl.uniform2f(sk.uInvP, 1 / proj[0], 1 / proj[5]);
+  gl.uniformMatrix3fv(sk.uInvRot, false, invRot);
+  gl.uniform3fv(sk.uNGP, NGP); gl.uniform3fv(sk.uGX, GX); gl.uniform3fv(sk.uGY, GY);
+  gl.uniform1f(sk.uMw, S.stars ? LOOK.mw : 0);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  // the bodies, as the picture knows them: the largest and the second from
+  // the last report, carried forward by their drift since. Each is a ball
+  // for the skin to lean on, an occluder in the sun and in the other's
+  // light, and — hot, past the settle — a light itself, shining with the
+  // glow of its surface temperature, brighter than the sun on anything near
+  var nl = 0, lp = [0, 0, 0, 0, 0, 0], lc = [0, 0, 0, 0, 0, 0], lr = [1, 1], no = 0, occ = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+  var nb = 0, ball = [0, 0, 0, 1, 0, 0, 0, 1], lball = [-1, -1];
+  var occlude = function (c, r) { occ[no * 4] = c[0]; occ[no * 4 + 1] = c[1]; occ[no * 4 + 2] = c[2]; occ[no * 4 + 3] = r; no++; };
+  if (sim && report && report.com && sim.phase !== 'settle') {
+    var lag = sim.t - (report.t || sim.t), hot = sim.phase === 'full';
+    var bodies = [{ com: report.com, vel: report.vel || [0, 0, 0], R: report.R, Redge: report.Redge, mass: report.largest || 0, imp: report.largestImp || 0, Tsurf: report.Tsurf || 0, hotCom: report.hotCom, hotR: report.hotR }];
+    if (report.second && report.second.com) bodies.push({ com: report.second.com, vel: report.second.vel, R: report.second.R, Redge: report.second.Redge, mass: report.second.mass, imp: report.second.imp || 0, Tsurf: report.second.Tsurf || 0, hotCom: report.second.hotCom, hotR: report.second.hotR });
+    // the radius a body's skin is drawn at: where the analysis found its
+    // density fall away, plus the particle that stands on that edge — the
+    // mass says where a cold ball of it would end, and a hot one, puffed up
+    // by the impact, stands well above that. Without the edge, the mass at
+    // the density of what the body is made of, which may be lighter than
+    // Earth's while the report's radius is at Earth's density
+    var v1 = sim.R1 > 0 ? sim.R1 * sim.R1 * sim.R1 / sim.M1 : 1, v2 = sim.R2 > 0 ? sim.R2 * sim.R2 * sim.R2 / sim.M2 : v1;
+    bodies.forEach(function (bd) {
+      var e = toEye(bd.com[0] + bd.vel[0] * lag, bd.com[1] + bd.vel[1] * lag, bd.com[2] + bd.vel[2] * lag);
+      occlude(e, bd.R);                                  // every body shadows the other's light
+      var myBall = -1;
+      if (LK.balls && full && nb < 2 && bd.mass > 0) {
+        var Rd = bd.Redge > 0 ? bd.Redge + sim.a : Math.cbrt(bd.mass * ((1 - bd.imp) * v1 + bd.imp * v2)) + 0.45 * sim.a;
+        ball[nb * 4] = e[0]; ball[nb * 4 + 1] = e[1]; ball[nb * 4 + 2] = e[2]; ball[nb * 4 + 3] = Rd;
+        myBall = nb++;
+      }
+      if (!hot || bd.Tsurf < 900) return;
+      lball[nl] = myBall;                                // the light leaves its own ball's skin alone
+      // the light sits where the heat is — the glow-weighted centroid of the
+      // body's hot grains, their spread for its radius — and is eased toward
+      // each new report rather than jumped to it
+      var hc = LOOK.hotLight && bd.hotCom ? bd.hotCom : bd.com, hr = Math.min(Math.max(LOOK.hotLight && bd.hotR > 0 ? bd.hotR : bd.R, 0.25 * bd.R), bd.R);   // never wider than the body: hot ejecta still in its group would swell the light past the disk it should be lighting
+      var c = glowCol(bd.Tsurf), kk = S.glow * LOOK.magma * (1 + LOOK.reach * LOOK.reach);
+      var want = { off: [hc[0] - bd.com[0], hc[1] - bd.com[1], hc[2] - bd.com[2]], r: hr, c: [c[0] * kk, c[1] * kk, c[2] * kk] };
+      var st = lightSmooth[nl];
+      if (!st || lightGen !== sim.gen) st = lightSmooth[nl] = want;
+      else { for (var q = 0; q < 3; q++) { st.off[q] += (want.off[q] - st.off[q]) * 0.08; st.c[q] += (want.c[q] - st.c[q]) * 0.08; } st.r += (want.r - st.r) * 0.08; }
+      var el = toEye(bd.com[0] + st.off[0] + bd.vel[0] * lag, bd.com[1] + st.off[1] + bd.vel[1] * lag, bd.com[2] + st.off[2] + bd.vel[2] * lag);
+      lp[nl * 3] = el[0]; lp[nl * 3 + 1] = el[1]; lp[nl * 3 + 2] = el[2];
+      lc[nl * 3] = st.c[0]; lc[nl * 3 + 1] = st.c[1]; lc[nl * 3 + 2] = st.c[2];
+      lr[nl] = st.r * st.r;
+      nl++;
+    });
+    lightGen = sim.gen;
+    // the impactor, while its material is still a ball inside the merged
+    // group — the first hour, before it is smeared over the planet — is a
+    // ball in the planet's light too: it hides the planet from its own
+    // far side, and from what the contact throws off it
+    if (hot && report.impMass > 0.003) {
+      var ri = Math.cbrt(report.impMass / S.dens);
+      if (report.impRms < 1.3 * 0.775 * ri) occlude(toEye(report.impCom[0] + report.vel[0] * lag, report.impCom[1] + report.vel[1] * lag, report.impCom[2] + report.vel[2] * lag), ri);
+    }
+  }
+
+  // 3. compose: the lit skin, then the sky and the sun behind it, and the stars
   gl.bindFramebuffer(gl.FRAMEBUFFER, hdr.fbo);
   gl.viewport(0, 0, w, h);
   gl.clearColor(0, 0, 0, 1);
@@ -199,48 +312,26 @@ function render() {
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, blurB.mat);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, blurB.dep);
     gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, gbuf.dep);
-    gl.uniform1i(s.uMat, 0); gl.uniform1i(s.uDep, 1); gl.uniform1i(s.uDepRaw, 2);
+    gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, blurB.home);
+    gl.uniform1i(s.uMat, 0); gl.uniform1i(s.uDep, 1); gl.uniform1i(s.uDepRaw, 2); gl.uniform1i(s.uHome, 3);
     gl.uniform2f(s.uInvP, 1 / proj[0], 1 / proj[5]);
     gl.uniform2f(s.uRes, w, h);
     gl.uniform3fv(s.uSunEye, sunEye);
     gl.uniform1f(s.uGlow, S.glow);
     gl.uniform1f(s.uGlowT, LOOK.glowT); gl.uniform1f(s.uWhite, LOOK.white);
-    // the hot bodies as lights: the planet and the second body, where the
-    // last report put them plus their drift since, shining with the glow of
-    // their surface temperature — brighter than the sun on anything near
-    var nl = 0, lp = [0, 0, 0, 0, 0, 0], lc = [0, 0, 0, 0, 0, 0], lr = [1, 1], no = 0, occ = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-    if (report && report.Tsurf !== undefined && sim.phase === 'full') {
-      var lag = sim.t - (report.t || sim.t), bodies = [report];
-      if (report.second && report.second.com) bodies.push(report.second);
-      var toEye = function (x, y, z) {
-        return [view[0] * x + view[4] * y + view[8] * z + view[12], view[1] * x + view[5] * y + view[9] * z + view[13], view[2] * x + view[6] * y + view[10] * z + view[14]];
-      };
-      var occlude = function (c, r) { occ[no * 4] = c[0]; occ[no * 4 + 1] = c[1]; occ[no * 4 + 2] = c[2]; occ[no * 4 + 3] = r; no++; };
-      bodies.forEach(function (b) {
-        var e = toEye(b.com[0] + b.vel[0] * lag, b.com[1] + b.vel[1] * lag, b.com[2] + b.vel[2] * lag);
-        occlude(e, b.R);                                  // every body shadows the other's light
-        if (b.Tsurf < 900) return;
-        lp[nl * 3] = e[0]; lp[nl * 3 + 1] = e[1]; lp[nl * 3 + 2] = e[2];
-        var c = glowCol(b.Tsurf), k = S.glow * LOOK.magma * (1 + LOOK.reach * LOOK.reach);
-        lc[nl * 3] = c[0] * k; lc[nl * 3 + 1] = c[1] * k; lc[nl * 3 + 2] = c[2] * k;
-        lr[nl] = b.R * b.R;
-        nl++;
-      });
-      // the impactor, while its material is still a ball inside the merged
-      // group — the first hour, before it is smeared over the planet — is a
-      // ball in the planet's light too: it hides the planet from its own
-      // far side, and from what the contact throws off it
-      if (report.impMass > 0.003) {
-        var ri = Math.cbrt(report.impMass / S.dens);
-        if (report.impRms < 1.3 * 0.775 * ri) occlude(toEye(report.impCom[0] + report.vel[0] * lag, report.impCom[1] + report.vel[1] * lag, report.impCom[2] + report.vel[2] * lag), ri);
-      }
-    }
     gl.uniform1i(s.uNO, no); gl.uniform4fv(s['uOcc[0]'], occ);
     lastLights = { nl: nl, lp: lp.slice(), lc: lc.slice(), lr: lr.slice(), eye: eye.slice(), view: Array.from(view), loc: [s['uLPos[0]'], s['uLCol[0]'], s['uLR2[0]'], s.uNL] };
     gl.uniform1i(s.uNL, nl);
-    gl.uniform3fv(s['uLPos[0]'], lp); gl.uniform3fv(s['uLCol[0]'], lc); gl.uniform1fv(s['uLR2[0]'], lr);
+    gl.uniform3fv(s['uLPos[0]'], lp); gl.uniform3fv(s['uLCol[0]'], lc); gl.uniform1fv(s['uLR2[0]'], lr); gl.uniform1iv(s['uLBall[0]'], lball);
     gl.uniform1f(s.uReach2, LOOK.reach * LOOK.reach);
+    gl.uniform1f(s.uEmberMax, LOOK.emberMax);
     gl.uniform1f(s.uEdge, LOOK.edge); gl.uniform1f(s.uEdgeSoft, LOOK.edgeSoft); gl.uniform1f(s.uRad, sim.a);
+    gl.uniform1i(s.uNB, nb); gl.uniform4fv(s['uBall[0]'], ball);
+    gl.uniform1f(s.uBallK, LOOK.ball);
+    gl.uniform1f(s.uCut, LOOK.cut >= 0 ? LOOK.cut : (sim.phase === 'approach' ? 1 : 0));   // the ball's silhouette cuts its skin only while the bodies are whole balls
+    gl.uniform1f(s.uDetail, full && sim.home ? LK.detail : 0);
+    gl.uniform1f(s.uBump, LOOK.bump);
+    gl.uniform1f(s.uFull, full ? 1 : 0);
     gl.uniform1f(s.uDbg, LOOK.dbg || 0);
     gl.uniform1f(s.uP22, proj[10]);
     gl.uniform1f(s.uP32, proj[14]);
@@ -251,15 +342,17 @@ function render() {
   gl.depthMask(false);
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.ONE, gl.ONE);
-  if (LOOK.sunI > 0 && sunEye[2] < 0) {           // the sun is ahead of the camera
-    var su = sunProg.u;
-    gl.useProgram(sunProg.p);
-    gl.uniform2f(su.uRes, w, h);
-    gl.uniform2f(su.uInvP, 1 / proj[0], 1 / proj[5]);
-    gl.uniform3fv(su.uSunEye, sunEye);
-    gl.uniform1f(su.uSunR, LOOK.sunR); gl.uniform1f(su.uSunI, LOOK.sunI); gl.uniform1f(su.uHalo, LOOK.halo);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-  }
+  // the sky, and the sun in it when it is ahead of the camera
+  var su = sunProg.u;
+  gl.useProgram(sunProg.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, skyT.tex);
+  gl.uniform1i(su.uSky, 0);
+  gl.uniform2f(su.uInvRes, 1 / w, 1 / h);
+  gl.uniform2f(su.uRes, w, h);
+  gl.uniform2f(su.uInvP, 1 / proj[0], 1 / proj[5]);
+  gl.uniform3fv(su.uSunEye, sunEye);
+  gl.uniform1f(su.uSunR, LOOK.sunR); gl.uniform1f(su.uSunI, sunEye[2] < 0 ? LOOK.sunI : 0); gl.uniform1f(su.uHalo, LOOK.halo);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
   if (S.stars) {
     gl.useProgram(starProg.p);
     gl.uniformMatrix4fv(starProg.u.uVP, false, vp);
@@ -271,10 +364,11 @@ function render() {
     gl.drawArrays(gl.POINTS, 0, STAR_COUNT);
     gl.bindVertexArray(vao);
   }
-  gl.disable(gl.BLEND);
   gl.disable(gl.DEPTH_TEST);
+  gl.disable(gl.BLEND);
 
-  // 4. bloom: the bright part at a quarter size, a narrow blur then a wide one
+  // 4. bloom: the bright part at a quarter size, a narrow blur then a wide
+  //    one; then at a sixteenth, the widest
   gl.viewport(0, 0, bloomW, bloomH);
   gl.useProgram(brightProg.p);
   gl.bindFramebuffer(gl.FRAMEBUFFER, bloomA.fbo);
@@ -294,6 +388,23 @@ function render() {
     gl.uniform1f(bloomProg.u.uStep, bpass < 2 ? 1.5 : 3.0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
+  gl.viewport(0, 0, bloom2W, bloom2H);
+  gl.useProgram(brightProg.p);                   // with no threshold, the bright pass is a 4× downsample
+  gl.bindFramebuffer(gl.FRAMEBUFFER, bloomC.fbo);
+  gl.bindTexture(gl.TEXTURE_2D, bloomA.tex);
+  gl.uniform2f(brightProg.u.uInvRes, 1 / bloomW, 1 / bloomH);
+  gl.uniform1f(brightProg.u.uThr, 0);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  gl.useProgram(bloomProg.p);
+  gl.uniform2f(bloomProg.u.uInvRes, 1 / bloom2W, 1 / bloom2H);
+  var bq = [bloomC, bloomD];
+  for (var bpass2 = 0; bpass2 < 2; bpass2++) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, bq[(bpass2 + 1) & 1].fbo);
+    gl.bindTexture(gl.TEXTURE_2D, bq[bpass2 & 1].tex);
+    gl.uniform2f(bloomProg.u.uDir, 1 - (bpass2 & 1), bpass2 & 1);
+    gl.uniform1f(bloomProg.u.uStep, 1.5);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
 
   // 5. the film: tone map with the vignette, then FXAA on the way to the screen
   gl.bindFramebuffer(gl.FRAMEBUFFER, ldr.fbo);
@@ -302,13 +413,15 @@ function render() {
   var dbg = window.DBG | 0;
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, dbg === 1 ? gbuf.dep : dbg === 2 ? blurA.dep : dbg === 3 ? blurB.dep : hdr.tex);
   gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, bloomA.tex);
-  gl.uniform1i(toneProg.u.uHdr, 0); gl.uniform1i(toneProg.u.uBloom, 1);
+  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, bloomC.tex);
+  gl.uniform1i(toneProg.u.uHdr, 0); gl.uniform1i(toneProg.u.uBloom, 1); gl.uniform1i(toneProg.u.uBloom2, 2);
   gl.uniform2f(toneProg.u.uInvRes, 1 / w, 1 / h);
-  gl.uniform1f(toneProg.u.uBloomK, LOOK.bloomK);
+  gl.uniform1f(toneProg.u.uBloomK, LOOK.bloomK); gl.uniform1f(toneProg.u.uBloomK2, LOOK.bloomK2);
   gl.uniform1f(toneProg.u.uDbg, dbg ? 1 : 0);
   gl.uniform1f(toneProg.u.uExposure, S.exposure);
   gl.uniform1f(toneProg.u.uFilmic, LOOK.filmic);
   gl.uniform1f(toneProg.u.uVig, dbg ? 0 : LOOK.vignette);
+  gl.uniform1f(toneProg.u.uSat, LOOK.sat);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   gl.useProgram(fxaaProg.p);
@@ -338,6 +451,10 @@ CC.view = {
 
     fxaaProg = o.progs.fxaa; starProg = o.progs.star;
 
+    // the pass every page draws the same way is compiled here rather than handed in
+    skyProg = GLH.program(CC.glsl.QUAD_VS, CC.glsl.SKY_FS);
+    dummyHome = floatTex(1, 1, new Float32Array(4));
+
     hdr.fbo = gl.createFramebuffer(); hdr.depth = gl.createRenderbuffer();
     wireCamera();
 
@@ -356,6 +473,12 @@ CC.view = {
   setRadPow: function (e) { radPow = e; },
   setMaxPoint: function (px) { maxPoint = px > 0 ? Math.min(px, MAX_POINT) : MAX_POINT; },
   setPalette: function (p) { for (var i = 0; i < p.length && i < 8; i++) pal.set(p[i], i * 3); },
+  // what the page's bodies are to the picture — see LK
+  setLook: function (o) {
+    if (o.balls !== undefined) LK.balls = !!o.balls;
+    if (o.detail !== undefined) LK.detail = o.detail;
+    if (o.metal) { LK.metal.fill(0); for (var i = 0; i < o.metal.length && i < 8; i++) LK.metal[i] = o.metal[i]; }
+  },
   clampDist: function (lo, hi) { distMin = lo; distMax = hi; cam.dist = Math.max(lo, Math.min(hi, cam.dist)); }
 
 };

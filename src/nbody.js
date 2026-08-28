@@ -175,6 +175,14 @@ function build(opt) {
   var i, o;
   for (i = 0; i < n1; i++) { o = i * 4; pos[o] = b1[i * 3] + c1[0]; pos[o + 1] = b1[i * 3 + 1] + c1[1]; pos[o + 2] = b1[i * 3 + 2] + c1[2]; pos[o + 3] = lay[i]; }
   for (i = 0; i < n2; i++) { o = (n1 + i) * 4; pos[o] = b2[i * 3] + c2[0]; pos[o + 1] = b2[i * 3 + 1] + c2[1]; pos[o + 2] = b2[i * 3 + 2] + c2[2]; pos[o + 3] = lay[n1 + i] + 4; }
+  // and where each grain sat in its body when the body was built, in the
+  // body's own frame — the picture draws its surface in these coordinates,
+  // so the surface rides the material: it turns with the body, stretches
+  // with the arm and goes with the ejecta. The impactor's are offset so the
+  // two bodies do not wear the same pattern. Nothing in the physics reads it.
+  var home = new Float32Array(N * 4), hrng = mulberry(99);
+  for (i = 0; i < n1; i++) { o = i * 4; home[o] = b1[i * 3]; home[o + 1] = b1[i * 3 + 1]; home[o + 2] = b1[i * 3 + 2]; home[o + 3] = hrng(); }
+  for (i = 0; i < n2; i++) { o = (n1 + i) * 4; home[o] = b2[i * 3] + 1.5; home[o + 1] = b2[i * 3 + 1] + 0.7; home[o + 2] = b2[i * 3 + 2] - 1.1; home[o + 3] = hrng(); }
 
   // contact spring: half a radius of overlap at the reference speed for an
   // Earth-mantle particle; the step from the lightest particle's period
@@ -184,7 +192,7 @@ function build(opt) {
   var lnE = Math.log(opt.rest), zeta = -lnE / Math.sqrt(Math.PI * Math.PI + lnE * lnE);
   var cd = 2 * zeta * Math.sqrt(k * mref / 2);
 
-  if (sim) { freeTarget(sim.src); freeTarget(sim.dst); gl.deleteTexture(sim.mat); gl.deleteTexture(sim.diag); gl.deleteFramebuffer(sim.diagFbo); gl.deleteTexture(sim.perm); }
+  if (sim) { freeTarget(sim.src); freeTarget(sim.dst); gl.deleteTexture(sim.mat); gl.deleteTexture(sim.home); gl.deleteTexture(sim.diag); gl.deleteFramebuffer(sim.diagFbo); gl.deleteTexture(sim.perm); }
   var G = N >= 65536 ? 128 : 64;
   if (!grid || grid.G !== G) { freeGrid(grid); grid = makeGrid(G); }
   var settle = Math.ceil(0.6 / dt);
@@ -194,6 +202,7 @@ function build(opt) {
     spin0: w0, spin1: w1, cen0: c1, cen1: c2,
     src: simTarget(W, H, pos, vel), dst: simTarget(W, H, null, null),
     mat: floatTex(W, H, matR, gl.R32F, gl.FLOAT, gl.RED), matR: matR,
+    home: floatTex(W, H, home), homeArr: home,
     diag: floatTex(W, H, null), ref: null,
     t: 0, phase: 'settle', settleLeft: settle, settleTotal: settle, impactT: -1, com1: [0, 0, 0], stepNo: 0,
     damp: Math.exp(-dt * 12), soft: false, gen: ++gen,
@@ -590,13 +599,38 @@ function fof(N, mref, a, P, V, R, D, spring, touch, cap, sort) {
     // — a ball still, in the first hour, that shadows the planet's light
     var gx = x / mass, gy = y / mass, gz = z / mass, Rg = Math.cbrt(mass), shell = 0.64 * Rg * Rg, Ts = 0, ws = 0;
     var icx = imp > 0 ? ix / imp : 0, icy = imp > 0 ? iy / imp : 0, icz = imp > 0 ? iz / imp : 0, irms = 0;
+    // and where the body ends, for the picture: its mass in shells out to
+    // three radii, the density of each, and the first shell past the
+    // mantle's own where it falls under a third of the mantle's. The
+    // mass-radius says where a cold ball of this would end; a body hot
+    // from the impact stands well above it, and a skin cut at the
+    // mass-radius peeled it
+    // and where the heat is, for the picture's light: the glow-weighted
+    // centroid of the hot grains and their spread. A body's light sits
+    // there and not at its centre of mass — while two bodies are one
+    // group in contact the centre of mass is between them, and a ball of
+    // the mass-radius round it cut across the impactor; the glow is the
+    // contact's, and the light should come from it
+    var NBIN = 96, dr = 3 * Rg / NBIN, hist = new Float64Array(NBIN), hs = 0, hx = 0, hy = 0, hz = 0, hr2 = 0;
     for (t = 0; t < N; t++) if (find(t) === root) {
-      var sx = P[t * 4] - gx, sy = P[t * 4 + 1] - gy, sz = P[t * 4 + 2] - gz;
-      if (sx * sx + sy * sy + sz * sz > shell) { var Tt = Math.min(V[t * 4 + 3], 12000), wt = Tt * Tt; Ts += wt * Tt; ws += wt; }
+      var sx = P[t * 4] - gx, sy = P[t * 4 + 1] - gy, sz = P[t * 4 + 2] - gz, r2s = sx * sx + sy * sy + sz * sz;
+      var Th = V[t * 4 + 3];
+      if (r2s > shell) { var Tt = Math.min(Th, 12000), wt = Tt * Tt; Ts += wt * Tt; ws += wt; }
+      if (Th > 1200) { var wh = Math.min(Th, 12000); wh *= wh; hs += wh; hx += wh * P[t * 4]; hy += wh * P[t * 4 + 1]; hz += wh * P[t * 4 + 2]; hr2 += wh * (sx * sx + sy * sy + sz * sz); }
       if (P[t * 4 + 3] >= 3.5) { var ex = P[t * 4] - icx, ey = P[t * 4 + 1] - icy, ez = P[t * 4 + 2] - icz; irms += mref * R[t] * (ex * ex + ey * ey + ez * ez); }
+      var bi = Math.sqrt(r2s) / dr; hist[bi < NBIN - 1 ? bi | 0 : NBIN - 1] += mref * R[t];
     }
-    return { n: n, mass: mass, com: [gx, gy, gz], vel: [vx / mass, vy / mass, vz / mass], imp: imp / mass, iron: iron / mass, R: Rg, Tsurf: ws > 0 ? Ts / ws : 0,
-             impMass: imp, impCom: [icx, icy, icz], impRms: imp > 0 ? Math.sqrt(irms / imp) : 0 };
+    var hotCom = hs > 0 ? [hx / hs, hy / hs, hz / hs] : [gx, gy, gz], hotR = Rg;
+    if (hs > 0) { var ox = hotCom[0] - gx, oy = hotCom[1] - gy, oz = hotCom[2] - gz; hotR = Math.sqrt(Math.max(hr2 / hs - (ox * ox + oy * oy + oz * oz), 0)); }   // the spread about the hot centroid, from the spread about the centre of mass
+    var Redge = 0;
+    if (n >= 2000) {
+      var rho = new Float64Array(NBIN), refS = 0, refN = 0, bq, rm;
+      for (bq = 0; bq < NBIN; bq++) { rm = (bq + 0.5) * dr; rho[bq] = hist[bq] / (rm * rm * dr); if (rm > 0.6 * Rg && rm < 0.85 * Rg) { refS += rho[bq]; refN++; } }
+      Redge = Rg;
+      for (bq = 0; bq < NBIN; bq++) if ((bq + 0.5) * dr > 0.85 * Rg && refN > 0 && rho[bq] < 0.35 * refS / refN) { Redge = bq * dr; break; }
+    }
+    return { n: n, mass: mass, com: [gx, gy, gz], vel: [vx / mass, vy / mass, vz / mass], imp: imp / mass, iron: iron / mass, R: Rg, Redge: Redge, Tsurf: ws > 0 ? Ts / ws : 0,
+             hotCom: hotCom, hotR: hotR, impMass: imp, impCom: [icx, icy, icz], impRms: imp > 0 ? Math.sqrt(irms / imp) : 0 };
   }
   var A = stats(g1), B = g2 >= 0 ? stats(g2) : null;
   // the planet's spin: angular momentum about its centre over the moment of
@@ -642,7 +676,7 @@ function fof(N, mref, a, P, V, R, D, spring, touch, cap, sort) {
   if (B && B.n >= Math.max(8, N / 1000)) {
     var dAB = Math.sqrt((B.com[0] - A.com[0]) * (B.com[0] - A.com[0]) + (B.com[1] - A.com[1]) * (B.com[1] - A.com[1]) + (B.com[2] - A.com[2]) * (B.com[2] - A.com[2]));
     if (dAB > A.R + B.R + 2 * a) second = { mass: B.mass, dist: dAB, bound: energy(B.com[0], B.com[1], B.com[2], B.vel[0], B.vel[1], B.vel[2]) < 0, imp: B.imp, iron: B.iron,
-                                             com: B.com, vel: B.vel, R: B.R, Tsurf: B.Tsurf };
+                                             com: B.com, vel: B.vel, R: B.R, Redge: B.Redge, Tsurf: B.Tsurf, hotCom: B.hotCom, hotR: B.hotR };
   }
   // the books. Angular momentum about the origin, where the barycentre was
   // put. Potential energy off the mesh: half of m·φ for a particle on it (the
@@ -700,7 +734,7 @@ function fof(N, mref, a, P, V, R, D, spring, touch, cap, sort) {
     for (i = 0; i < N; i++) { var dst = bins[keys[i]]++; perm[dst] = i; into[i] = dst; }
     for (i = 0; i < list.length; i++) list[i] = into[list[i]];
   }
-  return { largest: A.mass, largestImp: A.imp, largestIron: A.iron, day: day, orbit: orbit, escape: esc, second: second, com: A.com, vel: A.vel, R: A.R, Tsurf: A.Tsurf,
+  return { largest: A.mass, largestImp: A.imp, largestIron: A.iron, day: day, orbit: orbit, escape: esc, second: second, com: A.com, vel: A.vel, R: A.R, Redge: A.Redge, Tsurf: A.Tsurf, hotCom: A.hotCom, hotR: A.hotR,
            impMass: A.impMass, impCom: A.impCom, impRms: A.impRms,
            M: Mt, drift: Math.sqrt(px * px + py * py + pz * pz) / Mt, L: Math.sqrt(Jx * Jx + Jy * Jy + Jz * Jz),
            KE: ke, PE: pe, EL: elastic, Q: Q, unseated: unseated / N, full: full / N,
@@ -745,6 +779,10 @@ function applyPerm(perm) {
   for (i = 0; i < N; i++) R[i] = old[perm[i]];
   sim.matR = R;
   gl.bindTexture(gl.TEXTURE_2D, sim.mat); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, sim.W, sim.H, gl.RED, gl.FLOAT, R);
+  var Hm = new Float32Array(N * 4), oldH = sim.homeArr;
+  for (i = 0; i < N; i++) { var s4 = perm[i] * 4, d4 = i * 4; Hm[d4] = oldH[s4]; Hm[d4 + 1] = oldH[s4 + 1]; Hm[d4 + 2] = oldH[s4 + 2]; Hm[d4 + 3] = oldH[s4 + 3]; }
+  sim.homeArr = Hm;
+  gl.bindTexture(gl.TEXTURE_2D, sim.home); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, sim.W, sim.H, gl.RGBA, gl.FLOAT, Hm);
   gl.bindTexture(gl.TEXTURE_2D, sim.perm); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, sim.W, sim.H, gl.RED, gl.FLOAT, perm);
   gl.useProgram(permProg.p);
   gl.bindFramebuffer(gl.FRAMEBUFFER, sim.dst.fbo);
