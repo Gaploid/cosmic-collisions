@@ -79,8 +79,8 @@ takes the beads off the limb — with a surface drawn in each grain's own
 coordinates so it rides the material, and hot rock glowing by its temperature
 and lighting everything else. Over that, the cinema: an atmosphere on each
 body, integrated along the ray through a shell keyed to the skin's own
-silhouette — blue on a cold planet, rock vapour boiling off where the heat
-is; the loose hot grains drawn once more as comets, streaked by their own
+silhouette — the steam a magma ocean boils off while the rock is cold, rock
+vapour where the heat is; the loose hot grains drawn once more as comets, streaked by their own
 motion; the bodies' sun shadows on the disk and on each other; convection
 cells on the melt; and a lens — the sun's glare walked past the bodies into
 shafts, an anamorphic streak and ghosts off the brightest, a heat shimmer,
@@ -103,6 +103,13 @@ credit.
 
 Broad strokes, newest first; the commit history tells each one in full.
 
+- **2026-08-29 — The air of that world.** The blue limb was today's sky, and
+  today's sky is nitrogen and two billion years of oxygen away from the
+  giant impact: a proto-Earth wears the steam its magma ocean boils off —
+  water and carbon dioxide at tens to hundreds of bars, white with cloud
+  rather than blue with Rayleigh. Theia has one now too, since a Mars-sized
+  body degasses one and holds it: a lighter planet keeps a shorter column
+  and keeps it further out, so hers is half as bright and twice as tall.
 - **2026-08-28 — The cinema.** The picture was correct and flat: balls with
   no air round them, ejecta as confetti, a melt as one yellow. Now the
   bodies wear an atmosphere — thin and blue while cold, a glowing vapour

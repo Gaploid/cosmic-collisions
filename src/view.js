@@ -312,11 +312,12 @@ function render() {
       var Rd = bd.Redge > 0 ? bd.Redge + sim.a : Math.cbrt(bd.mass * ((1 - bd.imp) * v1 + bd.imp * v2)) + 0.45 * sim.a;
       var hcw = bd.hotCom || cb, hoff = [hcw[0] - cb[0], hcw[1] - cb[1], hcw[2] - cb[2]];
       // the atmosphere is a planet's: the largest body's always, the
-      // second's when it has the mass of one — a tenth of an Earth: Mars, the
-      // hit-and-run survivor, a twin, never a moon — and stands clear of the
-      // first; a moonlet in the arm is neither round nor airy, and a shell
-      // round it was a ring on a clump
-      var planet = bi === 0 || (bd.mass >= 0.1 && bd.dist > bodies[0].R + 2.5 * bd.R);
+      // second's when it is heavy enough to have degassed one and hold it —
+      // past Mercury's mass, so a Mars-sized impactor wears one and a
+      // moonlet out of the disk does not — and stands clear of the first; a
+      // clump in the arm is neither round nor airy, and a shell round it was
+      // a ring on a lump
+      var planet = bi === 0 || (bd.mass >= 0.06 && bd.dist > bodies[0].R + 2.5 * bd.R);
       var fresh = function (k) { return { off: [0, 0, 0], prev: pc, rep: report, R: Rd, Ts: bd.Tsurf, hot: hoff.slice(), hotR: bd.hotR || 0, k: k }; };
       var bs = bodySmooth[bi];
       if (!bs || lightGen !== sim.gen) bs = bodySmooth[bi] = fresh(planet ? 1 : 0);
@@ -335,14 +336,22 @@ function render() {
       if (LK.balls && full && nb < 2 && bd.mass > 0) {
         ball[nb * 4] = e[0]; ball[nb * 4 + 1] = e[1]; ball[nb * 4 + 2] = e[2]; ball[nb * 4 + 3] = bs.R;
         aball[nb * 4] = e[0]; aball[nb * 4 + 1] = e[1]; aball[nb * 4 + 2] = e[2]; aball[nb * 4 + 3] = bs.R;
+        // What the shell scatters. Not the thin blue air of today — that is
+        // nitrogen, and two billion years of oxygen, away — but the steam a
+        // magma ocean boils off: water and carbon dioxide at tens to
+        // hundreds of bars, white with cloud rather than blue with Rayleigh.
+        // A lighter body degassed a shorter column and holds it further out,
+        // its gravity being lower — the column goes as the cube root of the
+        // mass, the height as its reciprocal — so a Mars wears half the haze
+        // twice as high, which is what a Mars does
         var Ts = hot ? bs.Ts : 0, heat = Math.min(Math.max((Ts - 700) / 2000, 0), 1);
-        var cold = bd.imp > 0.5 ? [0.9, 0.62, 0.38] : [0.3, 0.55, 1.0], ck = bd.imp > 0.5 ? 0.25 : 0.45;
+        var mk = Math.cbrt(Math.max(bd.mass, 0.02)), ck = 0.24 * Math.min(1, mk);
         var gc = glowCol(Math.max(Ts, 900));
         for (var q3 = 0; q3 < 3; q3++) {
-          atmCol[nb * 3 + q3] = LOOK.atm * cold[q3] * ck * bs.k;
+          atmCol[nb * 3 + q3] = LOOK.atm * LOOK.atmCol[q3] * ck * bs.k;
           atmEm[nb * 3 + q3] = LOOK.atm * LOOK.atmHot * heat * gc[q3] * 0.45 * bs.k;
         }
-        atmH[nb] = LOOK.atmH;
+        atmH[nb] = LOOK.atmH * Math.min(2, 1 / mk);
         // the vapour is where the heat is: the hot centroid, and its spread
         // taken out to the edge of the hot grains — a uniform ball's rms is
         // 0.775 of its radius
