@@ -175,6 +175,13 @@ credit.
 
 Broad strokes, newest first; the commit history tells each one in full.
 
+- **2026-08-28 — A longer run-up, and a loading line.** The bodies set off
+  3.7 R⊕ short of contact instead of 2.4, and slower for it: the approach
+  runs some seven seconds at 1× where it was under five, enough to see who
+  is coming from where before the splash. And the page says what it is doing
+  while the thread is away: a line mid-screen, building so many bodies or
+  settling them, a bar under it, gone when the approach begins. The
+  Chicxulub page is no longer linked from the main one.
 - **2026-08-27 — A surface.** The planet was a blue ball with the lumps the
   impostors left in it: one colour per material, no relief, no glint, a limb
   that tore into steps when the camera came close, and black behind it. It

@@ -164,7 +164,7 @@ function build(opt) {
   var vesc = Math.sqrt(2 * M / Rsum);
   var vc = opt.vfac * vesc;
   var bc = Rsum * Math.sin(opt.angle * Math.PI / 180);
-  var D = Rsum + 2.4;
+  var D = Rsum + 3.7;   // the start line, 3.7 R⊕ short of contact: a few seconds of approach at 1×, to take the scene in
   var vD = Math.sqrt(Math.max(vc * vc - 2 * M * (1 / Rsum - 1 / D), 0.04));
   var bD = Math.min(bc * vc / vD, D * 0.95);
   var xD = -Math.sqrt(D * D - bD * bD);

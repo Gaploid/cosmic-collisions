@@ -70,6 +70,7 @@
 <div class="hud" id="hud-report" hidden></div>
 <div class="hud" id="hud-help">drag — rotate &nbsp;·&nbsp; wheel — zoom &nbsp;·&nbsp; space — pause &nbsp;·&nbsp; r — restart &nbsp;·&nbsp; f — follow</div>
 <div class="hud" id="hud-stat"><strong id="hud-clock">T+ 0h 00m</strong><span id="hud-fps"></span></div>
+<div class="hud busy" id="hud-load"><span id="hud-load-text">building</span><div class="bar"><i id="hud-load-bar"></i></div></div>
 </div>
 <div id="fallback">WebGL 2 is not available in this browser —<br>the simulation cannot run.</div>
 <!-- The engine, shared with the other scenario pages. Plain scripts in
@@ -99,8 +100,8 @@ var canvas = boot.canvas, gl = boot.gl, floatBlend = boot.floatBlend;
 var T_UNIT = CC.nbody.T_UNIT, V_UNIT = CC.nbody.V_UNIT, E_KG = CC.nbody.E_KG, CP_ROCK = CC.nbody.CP_ROCK, L_EM = CC.nbody.L_EM;
 var N_CHOICES = CC.N_CHOICES, N_LABELS = CC.N_LABELS;
 var PRESETS = {
-  theia:   { q: 0.10, angle: 45, vfac: 1.05, dist: 7.5, label: 'theia' },      // the canonical Moon-forming impact
-  headon:  { q: 0.10, angle: 0,  vfac: 1.00, dist: 7.5, label: 'head-on' },
+  theia:   { q: 0.10, angle: 45, vfac: 1.05, dist: 10.5, label: 'theia' },     // the canonical Moon-forming impact
+  headon:  { q: 0.10, angle: 0,  vfac: 1.00, dist: 8,   label: 'head-on' },
   hitrun:  { q: 0.25, angle: 65, vfac: 1.60, dist: 10,  label: 'hit & run' },  // grazing and fast: the impactor survives
   twins:   { q: 1.00, angle: 45, vfac: 1.10, dist: 9,   label: 'twins' },
   shatter: { q: 0.50, angle: 20, vfac: 2.60, dist: 18,  label: 'shatter' }
@@ -198,6 +199,30 @@ function build() {
   VIEW.setTarget([0, 0, 0]);   // written and never read — see the note in src/view.js
 }
 
+// ---------- the loading line ----------
+// build() holds the thread for a second or three at the big particle counts,
+// and the settle is the first thing anyone sees: a line mid-screen says which
+// of the two is going on. The build is put off two frames so the line is on
+// screen before the thread goes away; runTo keeps the synchronous build().
+var building = false;
+function rebuild() {
+  if (building) return;   // the build reads S when it runs, so a second ask changes nothing
+  building = true; loading();
+  requestAnimationFrame(function () { requestAnimationFrame(function () { build(); building = false; }); });
+}
+function loading() {
+  var el = $('hud-load'), on = building || !!(sim && sim.phase === 'settle');
+  el.classList.toggle('off', !on);
+  if (!on) return;
+  el.classList.toggle('busy', building);
+  if (building) $('hud-load-text').textContent = 'building ' + fmtCount(N_CHOICES[S.nIdx]) + ' bodies';
+  else {
+    var pct = Math.round(100 * (1 - sim.settleLeft / sim.settleTotal));
+    $('hud-load-text').textContent = 'settling ' + pct + '%';
+    $('hud-load-bar').style.width = pct + '%';
+  }
+}
+
 // ---------- HUD ----------
 function fmtMass(x) { return x.toFixed(3) + ' M⊕'; }
 function fmtTime(t) {
@@ -222,7 +247,7 @@ function showReport(rep, rows) {
 var fpsFrames = 0, fpsT0 = performance.now(), fps = 0;
 function hud() {
   var sub = PRESETS[S.preset] ? PRESETS[S.preset].label : 'custom';
-  if (!sim) sub += ' · building';
+  if (!sim || building) sub += ' · building';
   else if (sim.phase === 'settle') sub += ' · settling ' + Math.round(100 * (1 - sim.settleLeft / sim.settleTotal)) + '%';
   else if (CC.run.paused) sub += ' · paused';
   else if (sim.phase === 'approach') sub += ' · approach';
@@ -231,6 +256,7 @@ function hud() {
   $('hud-sub').textContent = sub;
   $('hud-clock').textContent = sim ? fmtTime(sim.t) : 'T+ 0h 00m';
   $('hud-fps').textContent = sim ? fmtCount(sim.N) + (DEV.compact ? '' : ' bodies') + ' · ' + Math.round(sim.vc * V_UNIT) + ' km/s · ' + fps + ' fps' : '';
+  loading();
   var rep = $('hud-report');
   if (report && sim) {
     var pct = function (x) { return Math.round(x * 100) + '%'; };
@@ -319,13 +345,13 @@ $('hud-preset').addEventListener('click', function (e) {
   cam.dist = p.dist;
   setOn($('hud-preset'), 'data-preset', S.preset);
   syncSliders();
-  build();
+  rebuild();
 });
 $('hud-run').addEventListener('click', function (e) {
   var b = e.target.closest('button');
   if (!b) return;
   if (b.id === 'btn-pause') togglePause();
-  else if (b.id === 'btn-restart') build();
+  else if (b.id === 'btn-restart') rebuild();
   else if (b.hasAttribute('data-speed')) { S.speed = parseFloat(b.getAttribute('data-speed')); setOn($('hud-run'), 'data-speed', S.speed); }
 });
 function togglePause() {
@@ -369,7 +395,7 @@ function custom() { S.preset = 'custom'; setOn($('hud-preset'), 'data-preset', '
 function onRange(id, live, apply, keepPreset) {
   var el = $(id);
   el.addEventListener('input', function () { apply(parseFloat(el.value)); syncSliders(); if (live) live(); });
-  if (!live) el.addEventListener('change', function () { if (!keepPreset) custom(); build(); });
+  if (!live) el.addEventListener('change', function () { if (!keepPreset) custom(); rebuild(); });
 }
 onRange('set-q', null, function (v) { S.q = v; });
 onRange('set-angle', null, function (v) { S.angle = v; });
@@ -385,7 +411,7 @@ $('set-stars').addEventListener('change', function () { S.stars = $('set-stars')
 window.addEventListener('keydown', function (e) {
   if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON')) return;
   if (e.code === 'Space') { e.preventDefault(); if (sim && sim.phase !== 'settle') togglePause(); }
-  else if (e.code === 'KeyR') build();
+  else if (e.code === 'KeyR') rebuild();
   else if (e.code === 'KeyF') S.follow = !S.follow;   // the camera rides the planet; the key is the whole of it
 });
 
@@ -478,7 +504,8 @@ window.__impact = {
 
 syncSliders();
 resize();
-build();
+cam.dist = PRESETS[S.preset].dist;   // the camera stands where the first preset asks, as it does when one is picked
+rebuild();
 requestAnimationFrame(frame);
 })();
 </script>
