@@ -47,11 +47,15 @@ if (narrowMQ) {
 // bloom's share; and the knee on the hot bodies' light on each other, in
 // the sun's units — a magma moonlet a few radii off outshines the sun by
 // the inverse square, and past this the fill is compressed rather than let
-// cut the planet into zones; and hotLight, 1 to put a body's light where its
-// heat is, 0 at its centre of mass
+// cut the planet into zones; hotLight, 1 to put a body's light where its
+// heat is, 0 at its centre of mass; and range, the depth step that ends a
+// surface for the skin's blur, in particle radii — wider melts more of a
+// rough surface together (measured on twins, 8 cut the shimmer of the
+// contact zone under a turning camera by a tenth and turned the grains
+// lying on the target into smudges; 4 keeps them)
 var LOOK = { glowT: 12000, white: 40000, bloomThr: 1.0, bloomK: 0.3, magma: 20, reach: 2.0,
              filmic: 0.7, vignette: 0.35, sunR: 0.006, sunI: 40, halo: 1.0, fxaa: 1, edge: 0.88, edgeSoft: 0.1, fat: 1.3,
-             ball: 0.6, bump: 1.6, cut: -1, mw: 0.1, sat: 1.1, bloomK2: 0.35, emberMax: 6, hotLight: 1 };
+             ball: 0.6, bump: 1.6, cut: -1, mw: 0.1, sat: 1.1, bloomK2: 0.35, emberMax: 6, hotLight: 1, range: 4 };
 // magma: the hot bodies' light on what is next to them, in their own
 // brightness — the real figure is a hundred, a 3000 K surface outshines the
 // sun that much at these distances, but the glow is compressed for the eye

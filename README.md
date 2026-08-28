@@ -127,6 +127,12 @@ credit.
 
 Broad strokes, newest first; the commit history tells each one in full.
 
+- **2026-08-28 — The light on the second body.** A hot body's light shaded
+  the skin by each grain's own normal, so a lit face came out as a honeycomb of
+  crescents that slid over it as the camera turned; it goes by the smoothed
+  skin's normal now, the grain's only along a silhouette. And a grain that
+  fell back onto a skin is drawn as part of that skin rather than as a raw ball
+  on it, whose pixel-snapped edge the blur smeared into streaks that flickered.
 - **2026-08-28 — A longer run-up, and a loading line.** The bodies set off
   3.7 R⊕ short of contact instead of 2.4, so the approach runs some seven
   seconds at 1× where it was under five — long enough to see who is coming from

@@ -150,15 +150,25 @@ var BLUR_FS = [
   '  float z0 = d0.r, nb = floor(d0.g);',
   '  float sigc = float(uTaps) * uStep * 0.18 + 0.5;',
   '  int ct = min(uTaps, int(ceil(2.5 * sigc / uStep)));',                                      // its own reach, narrower than the depth blur's
-  '  float cw = 0.0, cs = 0.0;',
+  // and, over the same reach, the most neighbours any pixel of the same
+  // surface has. A grain that fell back onto a skin has few of its own, but
+  // it lies in a skin that has many, and it is drawn as part of that skin:
+  // left to its own count it stood as a raw ball on a smoothed surface, and
+  // the next pass smeared its pixel-snapped edge along the skin as streaks
+  // that flickered whenever the camera moved. A loner in space, or a mote in
+  // front of a body, has no such neighbour at its depth and keeps its own
+  '  float cw = 0.0, cs = 0.0, nbx = nb;',
   '  for (int i = -ct; i <= ct; i++) {',
   '    float x = float(i) * uStep;',
   '    ivec2 c = clamp(me + uDir * int(round(x)), ivec2(0), uRes - 1);',
   '    float g = exp(-x * x / (2.0 * sigc * sigc));',
-  '    cw += g; cs += g * fract(texelFetch(uDep, c, 0).g);',
+  '    vec2 dc = texelFetch(uDep, c, 0).rg;',
+  '    cw += g; cs += g * fract(dc.g);',
+  '    if (dc.r > 0.0 && abs(dc.r - z0) < uRange) nbx = max(nbx, floor(dc.g));',
   '  }',
   '  float cov = cs / cw * 0.999;',
   '  if (z0 <= 0.0) { oMat = vec4(0.0); oDep = vec4(0.0, cov, 0.0, 1.0); oHome = vec4(0.0); return; }',
+  '  nb = nbx;',
   '  float sig = (float(uTaps) * uStep * 0.5 + 0.5) * max(smoothstep(1.0, 5.0, nb), 0.05);',   // loners and small clumps keep their shape
   '  float ws = 0.0, zs = 0.0;',
   '  vec4 ms = vec4(0.0), hs = vec4(0.0);',
@@ -292,6 +302,10 @@ var SHADE_FS = [
   '  float alpha = smoothstep(cut - uEdgeSoft, cut + uEdgeSoft, fract(d.g));',
   '  vec3 p = posAt(uDep, me);',
   '  vec3 ray = normalize(p);',
+  // how near the skin's silhouette this pixel is, by the coverage: full
+  // through the skin, falling over the last few pixels before the edge —
+  // where the blur had one side to average and the skin's normal is a guess
+  '  float sil = 1.0 - smoothstep(0.55, 0.95, fract(d.g));',
   '  bool edge, edgeR;',
   '  vec3 n = normalAt(uDep, me, p, edge);',                            // the skin's
   '  vec3 nR = normalAt(uDepRaw, me, posAt(uDepRaw, me), edgeR);',      // the particle's own: honest at a silhouette, where the smoothed skin's turns any way
@@ -326,7 +340,7 @@ var SHADE_FS = [
   // droplet two particles up, nor the arm
   '  float onBall = 0.0; vec3 nBall = n;',
   '  float selfB[2]; selfB[0] = 0.0; selfB[1] = 0.0;',   // how much this pixel is each ball's own skin, for the ball's light to leave alone
-  '  vec3 nA = (edge || edgeR) ? nR : n;',
+  '  vec3 nA = safeNorm(mix(n, nR, max(sil, edge ? 1.0 : 0.0)), n);',   // the particle's own along the silhouette, where the skin's is a guess
   '  for (int i = 0; i < 2; i++) if (i < uNB) {',
   '    vec3 c = p - uBall[i].xyz; float r = length(c), R = uBall[i].w;',
   '    vec3 nb0 = c / max(r, 1e-6);',
@@ -340,10 +354,10 @@ var SHADE_FS = [
   '      alpha = min(alpha, 1.0 - smoothstep(R - pxw, R + pxw, b));',
   '    }',
   '  }',
-  '  float pull = onBall * ((edge || edgeR) ? 1.0 : uBallK);',
+  '  float pull = onBall * mix(uBallK, 1.0, max(sil, edge ? 1.0 : 0.0));',
   '  n = safeNorm(mix(n, nBall, pull), n);',
   '  nR = safeNorm(mix(nR, nBall, pull), nR);',
-  '  bool rim = (edge || edgeR) && onBall < 0.5;',
+  '  bool rim = edge && onBall < 0.5;',
   // the surface, and its relief: the height's slope across the screen, from
   // the derivatives the hardware keeps, tilts the normal — bump mapping with
   // no parametrisation (Mikkelsen) — with a cap on the tilt where the home
@@ -380,9 +394,12 @@ var SHADE_FS = [
   // where the mass is, not where the skin is, and a body half into the
   // planet was standing in the planet's shadow from the inside; the hot
   // bodies' light on everything else — the disk in the planet's glow — by
-  // the skin's normal or the particle's, whichever faces the light less:
-  // along a silhouette the smoothed skin's normal is noise, and this light
-  // is twenty times the sun's, so the noise would be a bright rim
+  // the skin's normal, and along a silhouette by the particle's own where
+  // that faces the light less: there the smoothed skin's normal is noise,
+  // and this light is twenty times the sun's, so the noise would be a
+  // bright rim. Only there — taken across the whole skin, the particle's
+  // normal printed every grain on a lit face as its own crescent, a
+  // honeycomb that slid over the surface as the camera turned
   '  vec3 V = -ray;',
   '  float NoV = max(dot(n, V), 1e-3), NoL = dot(n, uSunEye);',
   '  float wrap = 0.06 * uFull;',
@@ -409,7 +426,8 @@ var SHADE_FS = [
   '    vec3 l = uLPos[i] - p;',
   '    float d2 = dot(l, l) / uLR2[i];',
   '    vec3 lh = normalize(l);',
-  '    float face = min(dot(n, lh), dot(nR, lh));',
+  '    float fn = dot(n, lh);',
+  '    float face = mix(fn, min(fn, dot(nR, lh)), sil * (1.0 - onBall));',
   '    float own = uLBall[i] >= 0 ? 1.0 - selfB[uLBall[i]] : smoothstep(1.0, 3.0, d2);',
   '    ember += uLCol[i] * clamp((face + ew) / (1.0 + ew), 0.0, 1.0) / (d2 + uReach2) * own * shadow(p, uLPos[i], sqrt(uLR2[i]));',
   '  }',

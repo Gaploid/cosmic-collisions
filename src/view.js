@@ -208,7 +208,7 @@ function render() {
     gl.disable(gl.DEPTH_TEST);
     gl.useProgram(blurProg.p);
     gl.uniform1i(b.uMat, 0); gl.uniform1i(b.uDep, 1); gl.uniform1i(b.uHome, 2);
-    gl.uniform1f(b.uRange, 4.0 * sim.a);
+    gl.uniform1f(b.uRange, LOOK.range * sim.a);
     gl.uniform2i(b.uRes, w, h);
     var from = gbuf, ping = [blurA, blurB], passes = [];
     if (pre) passes.push([pre, 1], [pre, 1]);
