@@ -1,5 +1,7 @@
 # Cosmic Collisions
 
+**[Live demo → gaploid.github.io/cosmic-collisions](https://gaploid.github.io/cosmic-collisions/)**
+
 Impacts, simulated. Two planets of real mass fall together under their own
 gravity and collide — the splash, the tidal arm, the debris disk, and the moon
 that gathers out of it. Or a fourteen-kilometre asteroid comes down on the
