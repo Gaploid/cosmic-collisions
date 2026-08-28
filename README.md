@@ -28,7 +28,7 @@ the same columns from the first look to the last: what stays, what orbits and
 what escapes, what Moon that disk would make by the Ida–Canup–Stewart scaling,
 and the books on momentum, angular momentum and energy. In the advanced panel,
 mass, angle, speed, particle count, bounce, core and density restart the run;
-exposure, glow, shading and stars do not.
+exposure, glow, shading, stars, atmosphere, sparks, lens and drift do not.
 
 Drag rotates · wheel or pinch zooms · Space pauses · R restarts · F follows the
 largest body. On a phone it opens at 33k particles and gives back pixels — never
@@ -77,8 +77,15 @@ caught most of what was wrong. The picture is screen-space fluid rendering —
 impostors, a bilateral blur that melts them into a skin, a coverage cut that
 takes the beads off the limb — with a surface drawn in each grain's own
 coordinates so it rides the material, and hot rock glowing by its temperature
-and lighting everything else. GGX, ACES and FXAA; the knobs are in
-`__impact.look`.
+and lighting everything else. Over that, the cinema: an atmosphere on each
+body, integrated along the ray through a shell keyed to the skin's own
+silhouette — blue on a cold planet, rock vapour boiling off where the heat
+is; the loose hot grains drawn once more as comets, streaked by their own
+motion; the bodies' sun shadows on the disk and on each other; convection
+cells on the melt; and a lens — the sun's glare walked past the bodies into
+shafts, an anamorphic streak and ghosts off the brightest, a heat shimmer,
+chromatic aberration, grain, a split tone. GGX, ACES and FXAA; every knob is
+in `__impact.look`.
 
 ## The sky
 
@@ -96,6 +103,17 @@ credit.
 
 Broad strokes, newest first; the commit history tells each one in full.
 
+- **2026-08-28 — The cinema.** The picture was correct and flat: balls with
+  no air round them, ejecta as confetti, a melt as one yellow. Now the
+  bodies wear an atmosphere — thin and blue while cold, a glowing vapour
+  over the heat once hit — the loose hot grains fly as comets with tails,
+  the planet shadows its disk, the melt convects, and the film has a lens:
+  light shafts off a hidden sun, streak, ghosts, shimmer, aberration and
+  grain, with thirty thousand faint stars behind the catalogue and a camera
+  that drifts until it is touched. The picture keys the ball, the light and
+  the shell to a body's own core rather than its group's centre of mass,
+  which the arm pulled a seventh of a radius off, and eases each report's
+  jump. All of it for 0.3 ms a frame.
 - **2026-08-28 — The Moon stays.** The Moon the theia run makes — 1.3 M☾ at
   3.5–5 R⊕, outside the Roche limit, where the real one formed — came apart
   after a hundred hours: the mesh's far field pushed the system 18 m/s, a

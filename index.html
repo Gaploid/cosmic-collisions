@@ -64,6 +64,10 @@
     <label>glow <input type="range" id="set-glow" min="0" max="3" step="0.1" value="1"><span id="val-glow">1.0</span></label>
     <label>shading <input type="checkbox" id="set-shade" checked><span id="val-shade">on</span></label>
     <label>stars <input type="checkbox" id="set-stars" checked><span id="val-stars">on</span></label>
+    <label>atmosphere <input type="checkbox" id="set-atm" checked><span id="val-atm">on</span></label>
+    <label>sparks <input type="checkbox" id="set-sparks" checked><span id="val-sparks">on</span></label>
+    <label>lens <input type="checkbox" id="set-lens" checked><span id="val-lens">on</span></label>
+    <label>drift <input type="checkbox" id="set-drift" checked><span id="val-drift">on</span></label>
   </div>
 </div>
 </div>
@@ -120,7 +124,7 @@ var BLUR_PASSES = DEV.BLUR_PASSES, ANALYZE_EVERY = DEV.ANALYZE_EVERY, DEFAULT_N 
 // nothing from the panel, so spin0 and spin1 live here (negative is retrograde,
 // ±0.55 is the Ćuk & Stewart 2.6-hour Earth, and maclaurin() cuts the spheroid)
 var S = { q: 0.1, angle: 45, vfac: 1.05, spin0: 0.18, spin1: 0.20, nIdx: DEFAULT_N, rest: 0.3, core: 0.325, dens: 0.75,
-          exposure: 1.0, glow: 1.0, shade: true, stars: true, follow: false, speed: 4, preset: 'theia' };
+          exposure: 1.0, glow: 1.0, shade: true, stars: true, atm: true, sparks: true, lens: true, drift: true, follow: false, speed: 4, preset: 'theia' };
 var COL_TARGET = [0.40, 0.58, 0.90], COL_IMPACTOR = [0.96, 0.55, 0.28];
 // the palette, by w = layer + 4·body: core, mantle, crust for the target, then
 // the same three for the impactor — its core gold against Earth's silver
@@ -337,6 +341,10 @@ function syncSliders() {
   $('set-glow').value = S.glow; $('val-glow').textContent = S.glow.toFixed(1);
   $('val-shade').textContent = S.shade ? 'on' : 'off';
   $('val-stars').textContent = S.stars ? 'on' : 'off';
+  $('val-atm').textContent = S.atm ? 'on' : 'off';
+  $('val-sparks').textContent = S.sparks ? 'on' : 'off';
+  $('val-lens').textContent = S.lens ? 'on' : 'off';
+  $('val-drift').textContent = S.drift ? 'on' : 'off';
 }
 $('hud-preset').addEventListener('click', function (e) {
   var b = e.target.closest('button[data-preset]');
@@ -409,6 +417,12 @@ onRange('set-exp', function () {}, function (v) { S.exposure = v; });
 onRange('set-glow', function () {}, function (v) { S.glow = v; });
 $('set-shade').addEventListener('change', function () { S.shade = $('set-shade').checked; syncSliders(); });
 $('set-stars').addEventListener('change', function () { S.stars = $('set-stars').checked; syncSliders(); });
+// the cinema's switches: the atmosphere, the sparks, the lens — shafts,
+// streak, ghosts, shimmer, aberration, grain — and the camera's drift
+$('set-atm').addEventListener('change', function () { S.atm = $('set-atm').checked; syncSliders(); });
+$('set-sparks').addEventListener('change', function () { S.sparks = $('set-sparks').checked; syncSliders(); });
+$('set-lens').addEventListener('change', function () { S.lens = $('set-lens').checked; syncSliders(); });
+$('set-drift').addEventListener('change', function () { S.drift = $('set-drift').checked; syncSliders(); });
 window.addEventListener('keydown', function (e) {
   if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON')) return;
   if (e.code === 'Space') { e.preventDefault(); if (sim && sim.phase !== 'settle') togglePause(); }

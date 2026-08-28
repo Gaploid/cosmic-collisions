@@ -187,6 +187,84 @@ var BLUR_FS = [
   '}'
 ].join('\n');
 
+// The sparks: a loose grain hot enough to glow is drawn once more, after the
+// skin, as the comet it is — a soft halo a few of its radii wide, brighter
+// at the head and stretched back along its own motion by however far it
+// moved in the last few frames, added into the picture in front of whatever
+// is behind it. Six vertices a particle from gl_VertexID; a grain that does
+// not qualify is a degenerate triangle the rasteriser drops.
+var SPARK_VS = [
+  '#version 300 es',
+  'precision highp float;',
+  'precision highp int;',
+  'precision highp sampler2D;',
+  'uniform sampler2D uPos;',
+  'uniform sampler2D uVel;',
+  'uniform sampler2D uAux;',
+  'uniform sampler2D uMat;',
+  'uniform ivec2 uSize;',
+  'uniform mat4 uView;',
+  'uniform mat4 uProj;',
+  'uniform vec2 uRes;',
+  'uniform float uRad;',
+  'uniform float uRadPow;',
+  'uniform float uPx;',
+  'uniform float uSpSize;',    // the halo's radius, in the grain's own
+  'uniform float uStretch;',   // the streak: world length per unit velocity
+  'uniform float uK;',         // the halo's brightness, on the glow's
+  'uniform float uT0;',        // the temperature a grain starts to spark at
+  GLSL_GLOW,
+  'flat out vec2 vH;',         // head and tail, in pixels
+  'flat out vec2 vT;',
+  'flat out float vR;',
+  'flat out vec3 vCol;',
+  'void main() {',
+  '  int id = gl_VertexID / 6, c = gl_VertexID - id * 6;',
+  '  ivec2 tc = ivec2(id % uSize.x, id / uSize.x);',
+  '  vec4 P = texelFetch(uPos, tc, 0), V = texelFetch(uVel, tc, 0);',
+  '  float nb = texelFetch(uAux, tc, 0).w, T = V.w;',
+  '  vec4 e = uView * vec4(P.xyz, 1.0);',
+  '  vH = vec2(0.0); vT = vec2(0.0); vR = 0.0; vCol = vec3(0.0);',
+  '  if (T < uT0 || nb > 2.5 || e.z > -0.1) { gl_Position = vec4(0.0, 0.0, 2.0, 1.0); return; }',
+  '  float rad = uRad * pow(max(texelFetch(uMat, tc, 0).r, 1e-9), uRadPow);',
+  '  float hk = clamp((T - uT0) / 6000.0, 0.0, 1.0);',
+  '  float rpx = rad * uPx / (-e.z);',
+  '  float r = clamp(uSpSize * rpx * (0.7 + 0.4 * hk), 2.0, 28.0);',
+  '  vec3 ve = mat3(uView) * V.xyz;',
+  '  vec3 et = e.xyz - ve * uStretch;',
+  '  et.z = min(et.z, -0.1);',
+  '  vec4 ch = uProj * vec4(e.xyz + vec3(0.0, 0.0, 1.5 * rad), 1.0), ct = uProj * vec4(et, 1.0);',   // a grain lying on the skin is drawn a little in front of it
+  '  vec2 h = (ch.xy / ch.w * 0.5 + 0.5) * uRes, t = (ct.xy / ct.w * 0.5 + 0.5) * uRes;',
+  '  vec2 ax = t - h; float len = length(ax), maxLen = 8.0 * r;',
+  '  if (len > maxLen) { ax *= maxLen / len; t = h + ax; len = maxLen; }',
+  '  vec2 a = len > 0.5 ? ax / len : vec2(1.0, 0.0), pp = vec2(-a.y, a.x);',
+  '  int k = c < 3 ? c : (c == 3 ? 2 : (c == 4 ? 1 : 3));',                       // two triangles over the four corners: head-left, head-right, tail-left, tail-right
+  '  vec2 q = (k < 2 ? h - a * r : t + a * r) + pp * r * ((k & 1) == 0 ? 1.0 : -1.0);',
+  '  gl_Position = vec4((q / uRes * 2.0 - 1.0) * ch.w, ch.z, ch.w);',
+  '  vH = h; vT = t; vR = r;',
+  '  vCol = glow(T) * uK;',
+  '}'
+].join('\n');
+
+var SPARK_FS = [
+  '#version 300 es',
+  'precision highp float;',
+  'flat in vec2 vH;',
+  'flat in vec2 vT;',
+  'flat in float vR;',
+  'flat in vec3 vCol;',
+  'out vec4 o;',
+  'void main() {',
+  '  vec2 pa = gl_FragCoord.xy - vT, ba = vH - vT;',
+  '  float bb = dot(ba, ba);',
+  '  float u = bb > 1e-4 ? clamp(dot(pa, ba) / bb, 0.0, 1.0) : 1.0;',            // 0 at the tail, 1 at the head
+  '  vec2 q = pa - ba * u;',
+  '  float d2 = dot(q, q) / (vR * vR);',
+  '  float I = 0.35 * exp(-d2 * 2.2) * (0.12 + 0.88 * u * u) + exp(-d2 * 12.0) * u;',
+  '  o = vec4(vCol * I, 1.0);',
+  '}'
+].join('\n');
+
 var SHADE_FS = [
   '#version 300 es',
   'precision highp float;',
@@ -222,6 +300,12 @@ var SHADE_FS = [
   'uniform float uDetail;',     // 0 — the flat material; 1 — the surface; 2 — with craters
   'uniform float uBump;',       // the surface\'s relief, in particle radii
   'uniform float uFull;',       // 1 — the full look: specular, the wrap at the terminator, a cool fill; 0 — the plain one
+  'uniform float uShadow;',     // 1 — the bodies shadow each other and the disk in the sun
+  'uniform float uConv;',       // the convection cells on a melt, their contrast
+  'uniform mat3 uInvRot;',      // eye to world, for those cells: they are drawn in the body\'s frame, which the camera does not turn
+  'uniform vec3 uEyeW;',
+  'uniform float uSparkOn;',    // 1 — a loose hot grain is the spark pass to draw: its disc here keeps a quarter of its glow
+  'uniform float uTime;',       // the run\'s clock, slowed, to turn them with
   'out vec4 o;',
   GLSL_GLOW,
   GLSL_NOISE,
@@ -404,6 +488,22 @@ var SHADE_FS = [
   '  float NoV = max(dot(n, V), 1e-3), NoL = dot(n, uSunEye);',
   '  float wrap = 0.06 * uFull;',
   '  float diff = clamp((NoL + wrap) / (1.0 + wrap), 0.0, 1.0);',
+  // the sun's shadow: a body's ball between this pixel and the sun, when
+  // the pixel is not that body's own skin — the terminator is the skin's
+  // own business, and a body in contact stands inside the other's ball, so
+  // a pixel within the ball's reach is left to its own normal. The edge
+  // is the sun's half-degree, a penumbra that widens with the throw:
+  // the Moon's shadow on the planet is a sharp dot, the planet's on the
+  // disk a soft band
+  '  float sunLit = 1.0;',
+  '  for (int i = 0; i < 3; i++) if (i < uNO && uShadow > 0.5) {',
+  '    vec3 pc = uOcc[i].xyz - p; float r = uOcc[i].w;',
+  '    float along = dot(pc, uSunEye);',
+  '    if (along <= 0.0 || dot(pc, pc) < 1.44 * r * r) continue;',
+  '    float pen = max(0.03 * r, along * 0.0093);',
+  '    sunLit *= smoothstep(r - pen, r + pen, length(pc - uSunEye * along));',
+  '  }',
+  '  diff *= sunLit;',
   '  vec3 sunC = vec3(1.0, 0.97, 0.92) * 0.9;',
   '  vec3 amb = mix(vec3(0.12), vec3(0.055, 0.07, 0.10) * (0.75 + 0.25 * n.y), uFull);',
   // A hot moonlet a few radii off outshines the sun on the planet's night
@@ -442,13 +542,28 @@ var SHADE_FS = [
   '  float Vis = 0.5 / max(NoLc * sqrt(NoV * NoV * (1.0 - a2) + a2) + NoV * sqrt(NoLc * NoLc * (1.0 - a2) + a2), 1e-4);',
   '  vec3 F0 = mix(vec3(0.04), base, metal);',
   '  vec3 F = F0 + (1.0 - F0) * pow(1.0 - VoH, 5.0);',
-  '  col += uFull * Dg * Vis * F * NoLc * sunC;',
+  '  col += uFull * Dg * Vis * F * NoLc * sunC * sunLit;',
   // its own light: the glow by temperature, and on a magma ocean the crust it
   // wears — dark plates, the melt bright in the cracks between them; a crust
   // only warm shows the same cracks in red. The vapour, past a few thousand
   // kelvin, has no crust to wear
   '  float plates = molten * (1.0 - smoothstep(6000.0, 16000.0, m.a));',
   '  float em = uDetail > 0.5 ? mix(1.0, 0.3 + 1.7 * crack, max(plates * 0.9, warm * (1.0 - molten) * 0.7)) : 1.0;',
+  // the cells of a convecting melt. A churning surface has no coordinates
+  // of its own — the home field jumps from grain to grain there, and the
+  // surface drawn in it fades out — so its cells are drawn in the body's
+  // frame, a few grains across, and turned slowly with the run's clock:
+  // the melt reads as a melt rather than as a flat glow
+  '  if (uConv > 0.0 && molten > 0.0 && uFull > 0.5) {',
+  '    vec3 wp = uNB > 0 ? uInvRot * (p - uBall[0].xyz) : uInvRot * p + uEyeW;',
+  '    float cv = fbm(wp / (7.0 * uRad) + uTime * vec3(0.31, 0.23, 0.27), 3);',
+  '    float cw = molten * (1.0 - 0.6 * coh) * uConv * (1.0 - smoothstep(6000.0, 16000.0, m.a));',
+  '    em *= mix(1.0, clamp(0.6 + 1.4 * (cv + 0.35), 0.2, 2.0), cw);',
+  '  }',
+  // a grain on its own, hot, is drawn as a comet by the spark pass — a
+  // soft core in place of this disc's hard-edged square — so the disc keeps
+  // a quarter of its glow and hands the rest over
+  '  em *= mix(1.0, 0.25, uSparkOn * (1.0 - smoothstep(1.5, 3.0, floor(d.g))) * smoothstep(900.0, 1300.0, m.a));',
   '  vec3 emis = glow(m.a) * uGlow * em;',
   '  gl_FragDepth = ((uP22 * (-z) + uP32) / z) * 0.5 + 0.5;',
   '  if (uDbg > 0.5) { vec3 lh0 = normalize(uLPos[0] - p); o = vec4(uDbg < 1.5 ? ember : uDbg < 2.5 ? nR * 0.5 + 0.5 : uDbg < 3.5 ? lh0 * 0.5 + 0.5 : uDbg < 4.5 ? n * 0.5 + 0.5 : uDbg < 5.5 ? fract(hm.xyz) : vec3(tone), 1.0); return; }',
@@ -583,6 +698,156 @@ var SUN_FS = [
   '}'
 ].join('\n');
 
+// The atmosphere: a shell round each ball, thin on a cold body and puffed
+// on a hot one, that scatters the sun's light — the path through it is
+// longest at the limb, so the limb glows, and brightest looking toward the
+// sun, so a planet in front of the sun wears a ring — and, on a hot body,
+// glows with its own vapour. Integrated along the ray in eight steps from
+// where it enters the shell to where it meets the ball or the skin, and
+// added over the picture. A shell thinner than the pixels is drawn as wide
+// as them and as much fainter, so the far view keeps a soft limb and not a
+// crawling one.
+var ATM_FS = [
+  '#version 300 es',
+  'precision highp float;',
+  'precision highp int;',
+  'precision highp sampler2D;',
+  'uniform sampler2D uDep;',       // the skin's depth, smoothed
+  'uniform vec2 uInvP;',
+  'uniform vec2 uRes;',
+  'uniform vec3 uSunEye;',
+  'uniform int uNB;',
+  'uniform vec4 uBall[2];',        // centre in eye space, the radius the skin is drawn at
+  'uniform vec3 uAtmCol[2];',      // what the shell scatters
+  'uniform vec3 uAtmEm[2];',       // and what it glows with of itself
+  'uniform float uAtmH[2];',       // its thickness, in radii
+  'uniform vec4 uAtmHot[2];',      // where the body's heat is, in eye space, and how far it reaches: the vapour is boiled off there
+  'uniform float uRad;',           // a particle's radius: how far the skin may stand off the ball
+  'uniform float uEdge;',          // the skin's silhouette cut and its feather, as the shade pass has them
+  'uniform float uEdgeSoft;',
+  'uniform float uK;',
+  'out vec4 o;',
+  'void main() {',
+  '  ivec2 me = ivec2(gl_FragCoord.xy);',
+  '  vec2 ndc = (vec2(me) + 0.5) / uRes * 2.0 - 1.0;',
+  '  vec3 ray = normalize(vec3(ndc * uInvP, -1.0));',
+  '  vec2 dep = texelFetch(uDep, me, 0).rg;',
+  '  float zs = dep.r;',
+  // the skin's last pixels are feathered — part skin, part what is behind
+  // — and the shell treats them as that much outside: keyed to the
+  // silhouette and run the whole chord, or the dark feather stood as a
+  // line between the haze and the surface
+  '  float skinA = zs > 0.0 ? smoothstep(uEdge - uEdgeSoft, uEdge + uEdgeSoft, fract(dep.g)) : 0.0;',
+  '  float ts = zs > 0.0 ? zs / (-ray.z) : 1e9;',
+  '  vec3 col = vec3(0.0);',
+  '  float fwd = pow(max(dot(ray, uSunEye), 0.0), 8.0);',
+  '  for (int i = 0; i < 2; i++) if (i < uNB) {',
+  '    vec3 C = uBall[i].xyz; float R = uBall[i].w, H = uAtmH[i];',
+  '    if (R <= 0.0 || H <= 0.0) continue;',
+  '    float pxu = 0.5 * uRes.y / uInvP.y / max(-C.z, 0.05);',
+  '    float thick = H * R * pxu, k = 1.0;',
+  '    if (thick < 3.0) { k = thick / 3.0; H = 3.0 / (R * pxu); }',
+  '    vec3 hotC = uAtmHot[i].xyz; float hotR = uAtmHot[i].w, hotK = length(uAtmEm[i]) > 0.0 ? 1.0 : 0.0;',
+  '    float Hm = H * (1.0 + 1.5 * hotK), Ro = R * (1.0 + Hm) + 3.0 * uRad;',   // the shell as wide as the vapour can puff it, and as far out as the skin may stand
+  '    float b = dot(ray, C), cc = dot(C, C);',
+  '    float disc = b * b - (cc - Ro * Ro);',
+  '    if (disc <= 0.0) continue;',
+  '    float sq = sqrt(disc), t0 = max(b - sq, 0.0), t1 = b + sq;',
+  // the ball is where the mass is, and the skin stands a particle or two
+  // off it either way — after the impact it is not cut to the ball. So
+  // outside the silhouette the shell is keyed to the skin: a walk across
+  // the screen toward the ball's centre finds where the skin starts, and
+  // the shell's floor is set there, within a few particles of the ball
+  '    float Rl = R;',
+  '    if (skinA < 0.999) {',
+  '      vec2 cpx = ((C.xy / (-C.z)) / uInvP * 0.5 + 0.5) * uRes - gl_FragCoord.xy;',
+  '      float dl = length(cpx), span = (Hm * R + 3.0 * uRad) * pxu, g = 3.0 * span;',
+  '      if (dl > 1.0) {',
+  // three walks abreast, two particles apart along the limb, and their
+  // mean: the silhouette is a staircase of discs, and a floor that followed
+  // every step of it was a frill
+  '        vec2 st = cpx / dl * max(span / 10.0, 1.0), tg = vec2(-st.y, st.x) / length(st) * (2.0 * uRad * pxu);',
+  '        g = 0.0;',
+  '        for (int w = -1; w <= 1; w++) {',
+  '          vec2 o0 = gl_FragCoord.xy + tg * float(w); float gw = span;',
+  '          for (int m = 1; m <= 10; m++) if (texelFetch(uDep, ivec2(o0 + st * float(m)), 0).r > 0.0) {',
+  '            float lo = float(m - 1), hi = float(m);',   // then to a pixel, so the floor is not a staircase of the walk's steps either
+  '            for (int n = 0; n < 3; n++) { float mid = 0.5 * (lo + hi); if (texelFetch(uDep, ivec2(o0 + st * mid), 0).r > 0.0) hi = mid; else lo = mid; }',
+  '            gw = length(st) * hi; break;',
+  '          }',
+  '          g += gw;',
+  '        }',
+  '      }',
+  '      Rl = clamp(sqrt(max(cc - b * b, 0.0)) - g / (3.0 * pxu), R - 3.0 * uRad, R + 3.0 * uRad);',
+  '    }',
+  '    float di = b * b - (cc - Rl * Rl), dR = b * b - (cc - R * R);',
+  '    float tOut = di > 0.0 ? min(t1, b - sqrt(di)) : t1;',                       // outside: to the shell's floor, or the whole chord
+  '    float tIn = min(min(t1, ts), dR > 0.0 ? b - sqrt(dR) : t1);',              // on the skin: to the skin
+  '    t1 = mix(tOut, tIn, skinA);',
+  '    if (t1 <= t0) continue;',
+  '    float dt = (t1 - t0) / 8.0;',
+  // the vapour: over the heat — a plume over the contact at first, the
+  // whole shell once the body is molten through — the shell is thicker,
+  // glows of itself, and scatters warm rather than blue
+  '    float acc = 0.0, lit = 0.0, hotA = 0.0;',
+  '    for (int j = 0; j < 8; j++) {',
+  '      vec3 x = ray * (t0 + dt * (float(j) + 0.5)); vec3 rel = x - C; float r = length(rel);',
+  '      float dh = max(distance(x, hotC) - hotR, 0.0) / (0.3 * R);',
+  '      float hw = hotK * exp(-dh * dh);',
+  '      float hgt = clamp((r - Rl) / (H * R * (1.0 + 1.5 * hw)), 0.0, 1.0);',
+  '      float dens = exp(-hgt * 3.0) * (1.0 - hgt) * (1.0 - hgt);',
+  '      float day = smoothstep(-0.2, 0.35, dot(rel / max(r, 1e-6), uSunEye));',
+  '      acc += dens; lit += dens * day * (1.0 - hw); hotA += dens * hw;',
+  '    }',
+  '    float norm = dt / (H * R) * k * uK;',
+  '    col += (uAtmCol[i] * lit * (1.0 + 2.0 * fwd) + vec3(1.0, 0.55, 0.3) * 0.35 * hotA * (1.0 + fwd) + uAtmEm[i] * hotA) * norm;',
+  '  }',
+  '  o = vec4(col, 1.0);',
+  '}'
+].join('\n');
+
+// The light shafts: from every pixel a walk toward the sun, adding up the
+// sun's glare wherever the skin is not in the way — the streaks a planet in
+// front of the sun throws, at a quarter of the size, laid over by the tone
+// pass. Nothing when the sun is behind the camera or well off the frame.
+var RAYS_FS = [
+  '#version 300 es',
+  'precision highp float;',
+  'precision highp int;',
+  'precision highp sampler2D;',
+  'uniform sampler2D uDep;',       // the skin's depth, at the full size
+  'uniform vec2 uRes;',            // of this target
+  'uniform vec2 uFull;',           // of the depth
+  'uniform vec2 uInvP;',
+  'uniform vec3 uSunEye;',
+  'uniform float uSunR;',
+  'uniform float uK;',
+  GLSL_HASH,
+  'float sunAt(vec2 ndc) {',
+  '  vec3 ray = normalize(vec3(ndc * uInvP, -1.0));',
+  '  float th = 2.0 * asin(min(0.5 * length(ray - uSunEye), 1.0));',
+  '  float x = max(th - uSunR, 0.0);',
+  '  return 1.0 - smoothstep(0.5 * uSunR, 2.5 * uSunR, th) + 0.35 * exp(-x / (4.0 * uSunR)) + 0.25 * exp(-x / 0.12) + 0.05 * exp(-x / 0.35);',
+  '}',
+  'out vec4 o;',
+  'void main() {',
+  '  if (uSunEye.z >= -0.05 || uK <= 0.0) { o = vec4(0.0); return; }',
+  '  vec2 sun = uSunEye.xy / (-uSunEye.z) / uInvP;',
+  '  if (max(abs(sun.x), abs(sun.y)) > 2.5) { o = vec4(0.0); return; }',
+  '  vec2 ndc = gl_FragCoord.xy / uRes * 2.0 - 1.0;',
+  '  float j = rnd(uint(gl_FragCoord.x) * 1973u + uint(gl_FragCoord.y) * 9277u);',
+  '  vec2 d = (sun - ndc) / 40.0;',
+  '  float acc = 0.0, w = 1.0, ws = 0.0;',
+  '  for (int i = 0; i < 40; i++) {',
+  '    vec2 q = ndc + d * (float(i) + j);',
+  '    float free = 1.0;',
+  '    if (abs(q.x) < 1.0 && abs(q.y) < 1.0) free = texelFetch(uDep, ivec2((q * 0.5 + 0.5) * uFull), 0).r > 0.0 ? 0.0 : 1.0;',
+  '    acc += sunAt(q) * free * w; ws += w; w *= 0.95;',
+  '  }',
+  '  o = vec4(vec3(1.0, 0.9, 0.75) * (acc / ws * uK), 1.0);',
+  '}'
+].join('\n');
+
 var TONE_FS = [
   '#version 300 es',
   'precision highp float;',
@@ -597,21 +862,55 @@ var TONE_FS = [
   'uniform float uVig;',
   'uniform float uSat;',
   'uniform float uDbg;',
+  'uniform sampler2D uRays;',     // the light shafts
+  'uniform sampler2D uStreak;',   // the brightest, smeared across
+  'uniform sampler2D uGhost;',    // the brightest, softened, for the ghosts
+  'uniform float uStreakK;',
+  'uniform float uGhostK;',
+  'uniform float uHaze;',         // the heat shimmer
+  'uniform float uGrade;',        // the split tone
+  'uniform float uT;',
   'out vec4 o;',
+  // a ghost is a sample of the brightest flipped through the centre of the
+  // lens, and nothing where that lands off the frame
+  'vec3 ghost(vec2 u) {',
+  '  vec2 w = smoothstep(vec2(0.0), vec2(0.12), u) * smoothstep(vec2(1.0), vec2(0.88), u);',
+  '  vec3 g = texture(uGhost, clamp(u, 0.0, 1.0)).rgb;',
+  '  return g / (1.0 + g) * w.x * w.y;',
+  '}',
   // the ACES fit (Narkowicz): a toe that keeps the shadows dark and a
   // shoulder that takes the hottest to white without a flat clip
   'vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }',
   'void main() {',
-  '  vec3 c = texelFetch(uHdr, ivec2(gl_FragCoord.xy), 0).rgb;',
-  '  if (uDbg > 0.5) { o = vec4(vec3(fract(c.r * 4.0)) * step(0.001, c.r), 1.0); return; }',
   '  vec2 uv = gl_FragCoord.xy * uInvRes;',
+  '  if (uDbg > 0.5) { vec3 cd = texelFetch(uHdr, ivec2(gl_FragCoord.xy), 0).rgb; o = vec4(vec3(fract(cd.r * 4.0)) * step(0.001, cd.r), 1.0); return; }',
+  // the heat shimmer: the air over what glows bends the picture a little —
+  // the widest bloom's slope, as a lens, with a slow wobble under it
+  '  vec2 off = vec2(0.0);',
+  '  if (uHaze > 0.0) {',
+  '    vec2 e = uInvRes * 6.0;',
+  '    float l0 = dot(texture(uBloom2, uv).rgb, vec3(0.33)), lx = dot(texture(uBloom2, uv + vec2(e.x, 0.0)).rgb, vec3(0.33)), ly = dot(texture(uBloom2, uv + vec2(0.0, e.y)).rgb, vec3(0.33));',
+  '    float lq = min(l0, 1.5);',
+  '    off = uHaze * uInvRes * (vec2(lx - l0, ly - l0) * 40.0 + lq * 1.2 * vec2(sin(uv.y * 90.0 + uT * 2.7 + lq * 5.0), cos(uv.x * 83.0 + uT * 2.1)));',
+  '  }',
+  '  vec3 c = texture(uHdr, uv + off).rgb;',
   '  c += texture(uBloom, uv).rgb * uBloomK + texture(uBloom2, uv).rgb * uBloomK2;',
+  '  c += texture(uRays, uv).rgb;',
+  '  c += texture(uStreak, uv).rgb * vec3(0.45, 0.6, 1.0) * uStreakK;',
+  '  if (uGhostK > 0.0) {',
+  '    vec2 q0 = uv - 0.5;',
+  '    vec3 gs = ghost(0.5 - q0 * 0.55) * vec3(0.7, 0.8, 1.0) + ghost(0.5 - q0 * 1.35) * vec3(1.0, 0.75, 0.6) * 0.6 + ghost(0.5 + q0 * 0.3) * vec3(0.8, 1.0, 0.85) * 0.4;',
+  '    c += gs * uGhostK;',
+  '  }',
   '  vec2 q = uv - 0.5;',
   '  float vig = 1.0 - uVig * pow(dot(q, q) * 2.0, 1.1);',             // the corners are 1 − uVig, the centre untouched
   '  c *= uExposure * vig;',
   '  c = uFilmic > 0.0 ? aces(c * uFilmic) : pow(vec3(1.0) - exp(-c), vec3(0.92));',
   '  c = mix(vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))), c, uSat);',
-  '  o = vec4(vec3(0.016, 0.024, 0.04) * vig + c, 1.0);',
+  // the split tone: the shadows a little cool, the lights a little warm
+  '  float lg = dot(c, vec3(0.2126, 0.7152, 0.0722));',
+  '  c += uGrade * (vec3(-0.02, 0.0, 0.045) * (1.0 - lg) * (1.0 - lg) + vec3(0.035, 0.012, -0.03) * lg * lg);',
+  '  o = vec4(vec3(0.016, 0.024, 0.04) * vig + clamp(c, 0.0, 1.0), 1.0);',
   '}'
 ].join('\n');
 
@@ -623,20 +922,38 @@ var FXAA_FS = [
   'uniform sampler2D uSrc;',
   'uniform vec2 uInvRes;',
   'uniform float uOn;',
+  'uniform float uCA;',           // the chromatic aberration, in pixels at the corner
+  'uniform float uGrain;',
+  'uniform float uT;',
   'out vec4 o;',
+  GLSL_HASH,
   'float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }',
+  // the lens's last word: the red and the blue pulled apart toward the
+  // corners, and the grain, fresh every frame and mostly in the dark
+  'vec3 finish(vec3 c, vec2 uv) {',
+  '  vec2 q0 = uv - 0.5;',
+  '  float rad2 = dot(q0, q0) * 2.0;',
+  '  if (uCA > 0.0) {',
+  '    vec2 off = q0 * rad2 * uCA * uInvRes * 1.4;',
+  '    float w = smoothstep(0.1, 0.5, rad2);',
+  '    c.r = mix(c.r, texture(uSrc, uv + off).r, w);',
+  '    c.b = mix(c.b, texture(uSrc, uv - off).b, w);',
+  '  }',
+  '  float g = rnd(uint(gl_FragCoord.x) * 7919u + uint(gl_FragCoord.y) * 104729u + uint(uT * 60.0) * 15485863u) - 0.5;',
+  '  return c + g * uGrain * (0.3 + 0.7 * (1.0 - luma(c)));',
+  '}',
   'void main() {',
   '  vec2 uv = gl_FragCoord.xy * uInvRes;',
   '  vec3 m = texture(uSrc, uv).rgb;',
   '  float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);',
   '  vec3 dither = vec3((n - 0.5) / 255.0);',
-  '  if (uOn < 0.5) { o = vec4(m + dither, 1.0); return; }',
+  '  if (uOn < 0.5) { o = vec4(finish(m, uv) + dither, 1.0); return; }',
   '  vec3 nw = texture(uSrc, uv + vec2(-1.0, -1.0) * uInvRes).rgb, ne = texture(uSrc, uv + vec2(1.0, -1.0) * uInvRes).rgb;',
   '  vec3 sw = texture(uSrc, uv + vec2(-1.0, 1.0) * uInvRes).rgb, se = texture(uSrc, uv + vec2(1.0, 1.0) * uInvRes).rgb;',
   '  float lNW = luma(nw), lNE = luma(ne), lSW = luma(sw), lSE = luma(se), lM = luma(m);',
   '  float lMin = min(lM, min(min(lNW, lNE), min(lSW, lSE)));',
   '  float lMax = max(lM, max(max(lNW, lNE), max(lSW, lSE)));',
-  '  if (lMax - lMin < max(0.03, lMax * 0.125)) { o = vec4(m + dither, 1.0); return; }',   // no edge here
+  '  if (lMax - lMin < max(0.03, lMax * 0.125)) { o = vec4(finish(m, uv) + dither, 1.0); return; }',   // no edge here
   '  vec2 dir = vec2(-((lNW + lNE) - (lSW + lSE)), (lNW + lSW) - (lNE + lSE));',
   '  float reduce = max((lNW + lNE + lSW + lSE) * (0.25 / 8.0), 1.0 / 128.0);',
   '  float rcp = 1.0 / (min(abs(dir.x), abs(dir.y)) + reduce);',
@@ -644,7 +961,7 @@ var FXAA_FS = [
   '  vec3 a = 0.5 * (texture(uSrc, uv + dir * (1.0 / 3.0 - 0.5)).rgb + texture(uSrc, uv + dir * (2.0 / 3.0 - 0.5)).rgb);',
   '  vec3 b = a * 0.5 + 0.25 * (texture(uSrc, uv - dir * 0.5).rgb + texture(uSrc, uv + dir * 0.5).rgb);',
   '  float lB = luma(b);',
-  '  o = vec4(((lB < lMin || lB > lMax) ? a : b) + dither, 1.0);',
+  '  o = vec4(finish((lB < lMin || lB > lMax) ? a : b, uv) + dither, 1.0);',
   '}'
 ].join('\n');
 
@@ -653,5 +970,6 @@ G.GLSL_NOISE = GLSL_NOISE;
 G.G_VS = G_VS; G.G_FS = G_FS; G.BLUR_FS = BLUR_FS; G.SHADE_FS = SHADE_FS;
 G.BRIGHT_FS = BRIGHT_FS; G.BLOOM_FS = BLOOM_FS; G.SKY_FS = SKY_FS; G.SUN_FS = SUN_FS;
 G.TONE_FS = TONE_FS; G.FXAA_FS = FXAA_FS;
+G.SPARK_VS = SPARK_VS; G.SPARK_FS = SPARK_FS; G.ATM_FS = ATM_FS; G.RAYS_FS = RAYS_FS;
 
 })();

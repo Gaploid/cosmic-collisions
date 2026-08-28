@@ -660,6 +660,21 @@ function fof(N, mref, a, P, V, R, D, spring, touch, cap, sort) {
     }
     var hotCom = hs > 0 ? [hx / hs, hy / hs, hz / hs] : [gx, gy, gz], hotR = Rg;
     if (hs > 0) { var ox = hotCom[0] - gx, oy = hotCom[1] - gy, oz = hotCom[2] - gz; hotR = Math.sqrt(Math.max(hr2 / hs - (ox * ox + oy * oy + oz * oz), 0)); }   // the spread about the hot centroid, from the spread about the centre of mass
+    // and the body's own centre, for the picture: the centre of mass of the
+    // group moves whenever the arm's clump is counted in or out of it, by
+    // a sixth of a radius at a time, and a ball, a light or a shell keyed
+    // to it lurched with every report. The core is the centroid of what
+    // lies within the radius, found twice over: the arm and the loose
+    // grains do not pull it
+    var core = [gx, gy, gz], rc2 = 1.15 * 1.15 * Rg * Rg;
+    for (var it = 0; it < 2; it++) {
+      var sm = 0, sx0 = 0, sy0 = 0, sz0 = 0;
+      for (t = 0; t < N; t++) if (find(t) === root) {
+        var qx = P[t * 4] - core[0], qy = P[t * 4 + 1] - core[1], qz = P[t * 4 + 2] - core[2];
+        if (qx * qx + qy * qy + qz * qz < rc2) { var mq = mref * R[t]; sm += mq; sx0 += mq * P[t * 4]; sy0 += mq * P[t * 4 + 1]; sz0 += mq * P[t * 4 + 2]; }
+      }
+      if (sm > 0) core = [sx0 / sm, sy0 / sm, sz0 / sm];
+    }
     var Redge = 0;
     if (n >= 2000) {
       var rho = new Float64Array(NBIN), refS = 0, refN = 0, bq, rm;
@@ -667,7 +682,7 @@ function fof(N, mref, a, P, V, R, D, spring, touch, cap, sort) {
       Redge = Rg;
       for (bq = 0; bq < NBIN; bq++) if ((bq + 0.5) * dr > 0.85 * Rg && refN > 0 && rho[bq] < 0.35 * refS / refN) { Redge = bq * dr; break; }
     }
-    return { n: n, mass: mass, com: [gx, gy, gz], vel: [vx / mass, vy / mass, vz / mass], imp: imp / mass, iron: iron / mass, R: Rg, Redge: Redge, Tsurf: ws > 0 ? Ts / ws : 0,
+    return { n: n, mass: mass, com: [gx, gy, gz], core: core, vel: [vx / mass, vy / mass, vz / mass], imp: imp / mass, iron: iron / mass, R: Rg, Redge: Redge, Tsurf: ws > 0 ? Ts / ws : 0,
              hotCom: hotCom, hotR: hotR, impMass: imp, impCom: [icx, icy, icz], impRms: imp > 0 ? Math.sqrt(irms / imp) : 0 };
   }
   var A = stats(g1), B = g2 >= 0 ? stats(g2) : null;
@@ -714,7 +729,7 @@ function fof(N, mref, a, P, V, R, D, spring, touch, cap, sort) {
   if (B && B.n >= Math.max(8, N / 1000)) {
     var dAB = Math.sqrt((B.com[0] - A.com[0]) * (B.com[0] - A.com[0]) + (B.com[1] - A.com[1]) * (B.com[1] - A.com[1]) + (B.com[2] - A.com[2]) * (B.com[2] - A.com[2]));
     if (dAB > A.R + B.R + 2 * a) second = { mass: B.mass, dist: dAB, bound: energy(B.com[0], B.com[1], B.com[2], B.vel[0], B.vel[1], B.vel[2]) < 0, imp: B.imp, iron: B.iron,
-                                             com: B.com, vel: B.vel, R: B.R, Redge: B.Redge, Tsurf: B.Tsurf, hotCom: B.hotCom, hotR: B.hotR };
+                                             com: B.com, core: B.core, vel: B.vel, R: B.R, Redge: B.Redge, Tsurf: B.Tsurf, hotCom: B.hotCom, hotR: B.hotR };
   }
   // the books. Angular momentum about the origin, where the barycentre was
   // put. Potential energy off the mesh: half of m·φ for a particle on it (the
@@ -772,7 +787,7 @@ function fof(N, mref, a, P, V, R, D, spring, touch, cap, sort) {
     for (i = 0; i < N; i++) { var dst = bins[keys[i]]++; perm[dst] = i; into[i] = dst; }
     for (i = 0; i < list.length; i++) list[i] = into[list[i]];
   }
-  return { largest: A.mass, largestImp: A.imp, largestIron: A.iron, day: day, orbit: orbit, escape: esc, second: second, com: A.com, vel: A.vel, R: A.R, Redge: A.Redge, Tsurf: A.Tsurf, hotCom: A.hotCom, hotR: A.hotR,
+  return { largest: A.mass, largestImp: A.imp, largestIron: A.iron, day: day, orbit: orbit, escape: esc, second: second, com: A.com, core: A.core, vel: A.vel, R: A.R, Redge: A.Redge, Tsurf: A.Tsurf, hotCom: A.hotCom, hotR: A.hotR,
            impMass: A.impMass, impCom: A.impCom, impRms: A.impRms,
            M: Mt, drift: Math.sqrt(px * px + py * py + pz * pz) / Mt, L: Math.sqrt(Jx * Jx + Jy * Jy + Jz * Jz),
            KE: ke, PE: pe, EL: elastic, Q: Q, unseated: unseated / N, full: full / N,

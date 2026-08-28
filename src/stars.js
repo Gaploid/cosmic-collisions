@@ -30,7 +30,7 @@ var STAR_VS = [
   '  gl_Position = uVP * vec4(uEye + aDir * 900.0, 1.0);',
   '  float mag = aStar.x * 15.9375 - 2.0;',        // 255/16, the packing step
   '  float m = 6.0 - mag;',                        // 0 at the limit, 7.5 at Sirius
-  '  float lum = (0.9 + m * 0.55) * uBright;',
+  '  float lum = (m >= 0.0 ? 0.9 + m * 0.55 : 0.9 * exp(m * 0.9)) * uBright;',   // past the catalogue's limit the faint ones fall off by the magnitude
   '  float halo = smoothstep(3.0, 7.5, m);',       // the bright few get a glow
   '  float bv = aStar.y * 3.1875 - 0.5;',          // 255/80
   '  vec3 tint = mix(vec3(0.72, 0.82, 1.00), vec3(1.00, 0.83, 0.66), clamp((bv + 0.15) / 1.45, 0.0, 1.0));',
@@ -61,12 +61,30 @@ var STAR_FS = [
 // The catalogue into two attributes: direction (int16 ×3) and magnitude,
 // colour (uint8 ×2). The same sky hangs over every scenario, so the buffers
 // are built here rather than copied into each page.
+// Behind the catalogue, the sky's depth: what the eye sees past sixth
+// magnitude on a dark night, drawn from a hash rather than a catalogue —
+// thirty thousand stars from the sixth to the ninth, more of them toward
+// the galactic plane, as there are. Off on a phone, which has no pixels to
+// spend on them. The pole of the plane is the one src/view.js draws by.
+var FAINT = 30000, NGP = [-0.8676, 0.4559, -0.1984];
 function starSetup(gl, starProg, vao) {
   var STAR_COUNT = 0, starVao = gl.createVertexArray();
   var raw = unb64(STAR_CAT);
-  STAR_COUNT = (raw.length / 6) | 0;
+  var nCat = (raw.length / 6) | 0, nFaint = CC.dev.PHONE || !CC.look.faint ? 0 : FAINT;
+  STAR_COUNT = nCat + nFaint;
   var dir = new Int16Array(STAR_COUNT * 3), mag = new Uint8Array(STAR_COUNT * 2);
-  for (var i = 0; i < STAR_COUNT; i++) {
+  var seed = 12345, rnd = function () { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+  for (var f = nCat; f < STAR_COUNT;) {
+    var z = rnd() * 2 - 1, ph = rnd() * 6.2831853, rr = Math.sqrt(1 - z * z);
+    var x = rr * Math.cos(ph), y = z, zz = rr * Math.sin(ph);
+    var lat = Math.abs(x * NGP[0] + y * NGP[1] + zz * NGP[2]);
+    if (rnd() > 0.3 + 0.7 * Math.exp(-lat / 0.3)) continue;
+    var mg = 6 + 3 * Math.pow(rnd(), 0.5);                                // more of the fainter, as of the fainter there are
+    dir[f * 3] = Math.round(x * 32767); dir[f * 3 + 1] = Math.round(y * 32767); dir[f * 3 + 2] = Math.round(zz * 32767);
+    mag[f * 2] = Math.round((mg + 2) / 15.9375 * 255); mag[f * 2 + 1] = Math.round((rnd() * 1.4 - 0.2 + 0.5) / 3.1875 * 255);
+    f++;
+  }
+  for (var i = 0; i < nCat; i++) {
     var ra = (raw[i * 6] | (raw[i * 6 + 1] << 8)) / 65536 * 6.2831853;
     var dv = (raw[i * 6 + 2] | (raw[i * 6 + 3] << 8));
     if (dv > 32767) dv -= 65536;

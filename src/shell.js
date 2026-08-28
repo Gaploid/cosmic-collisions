@@ -55,7 +55,22 @@ if (narrowMQ) {
 // lying on the target into smudges; 4 keeps them)
 var LOOK = { glowT: 12000, white: 40000, bloomThr: 1.0, bloomK: 0.3, magma: 20, reach: 2.0,
              filmic: 0.7, vignette: 0.35, sunR: 0.006, sunI: 40, halo: 1.0, fxaa: 1, edge: 0.88, edgeSoft: 0.1, fat: 1.3,
-             ball: 0.6, bump: 1.6, cut: -1, mw: 0.1, sat: 1.1, bloomK2: 0.35, emberMax: 6, hotLight: 1, range: 4 };
+             ball: 0.6, bump: 1.6, cut: -1, mw: 0.11, sat: 1.1, bloomK2: 0.35, emberMax: 6, hotLight: 1, range: 4,
+             // the cinema, 2026-08-28. The atmosphere: its brightness, its
+             // thickness in radii, and how much the vapour of a hot body
+             // glows; the sparks — the loose hot grains drawn as comets:
+             // their halo's brightness, its radius in the grain's own, and
+             // the streak in frames of their own motion; the bodies' sun
+             // shadows on the disk and on each other; the convection cells
+             // on a melt; the light shafts off the sun and the streak and
+             // ghosts the lens adds to what is brightest (past streakThr);
+             // the heat shimmer over what glows; the chromatic aberration
+             // in pixels at the corner; the grain; the split tone; the
+             // camera's drift in radians a second until it is touched; and
+             // the faint stars behind the catalogue's
+             atm: 1.5, atmH: 0.09, atmHot: 1.0, spark: 1.0, sparkSize: 2.0, sparkTrail: 8, shadows: 1,
+             conv: 1.0, rays: 0.7, streak: 0.4, streakThr: 4.0, ghosts: 0.1, haze: 1.0, ca: 1.5, grain: 0.035, grade: 1.0,
+             idleSpin: 0.03, faint: 1 };
 // magma: the hot bodies' light on what is next to them, in their own
 // brightness — the real figure is a hundred, a 3000 K surface outshines the
 // sun that much at these distances, but the glow is compressed for the eye

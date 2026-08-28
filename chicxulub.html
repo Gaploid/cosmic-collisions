@@ -65,6 +65,10 @@
     <label>glow <input type="range" id="set-glow" min="0" max="3" step="0.1" value="1"><span id="val-glow">1.0</span></label>
     <label>shading <input type="checkbox" id="set-shade" checked><span id="val-shade">on</span></label>
     <label>stars <input type="checkbox" id="set-stars" checked><span id="val-stars">on</span></label>
+    <label>atmosphere <input type="checkbox" id="set-atm" checked><span id="val-atm">on</span></label>
+    <label>sparks <input type="checkbox" id="set-sparks" checked><span id="val-sparks">on</span></label>
+    <label>lens <input type="checkbox" id="set-lens" checked><span id="val-lens">on</span></label>
+    <label>drift <input type="checkbox" id="set-drift" checked><span id="val-drift">on</span></label>
   </div>
 </div>
 </div>
@@ -140,7 +144,7 @@ var DEV = CC.dev;
 var ANALYZE_EVERY = DEV.ANALYZE_EVERY, DEFAULT_N = DEV.DEFAULT_N;
 
 var S = { view: 'crater', imp: 14, vimp: 20, angle: 60, sed: 3, dens: 2500, nIdx: DEFAULT_N, rest: 0.25,
-          exposure: 1.0, glow: 1.0, shade: true, stars: true, speed: 4, preset: 'chicxulub' };
+          exposure: 1.0, glow: 1.0, shade: true, stars: true, atm: true, sparks: true, lens: true, drift: true, speed: 4, preset: 'chicxulub' };
 
 // basement a granite grey-pink, the platform the pale carbonate above it, the
 // melt the target rock the coupling took, the impactor a dark carbonaceous
@@ -1472,6 +1476,10 @@ function syncSliders() {
   $('set-glow').value = S.glow; $('val-glow').textContent = S.glow.toFixed(1);
   $('val-shade').textContent = S.shade ? 'on' : 'off';
   $('val-stars').textContent = S.stars ? 'on' : 'off';
+  $('val-atm').textContent = S.atm ? 'on' : 'off';
+  $('val-sparks').textContent = S.sparks ? 'on' : 'off';
+  $('val-lens').textContent = S.lens ? 'on' : 'off';
+  $('val-drift').textContent = S.drift ? 'on' : 'off';
 }
 $('hud-preset').addEventListener('click', function (e) {
   var vb = e.target.closest('button[data-view]');
@@ -1549,6 +1557,12 @@ onRange('set-exp', function () {}, function (v) { S.exposure = v; });
 onRange('set-glow', function () {}, function (v) { S.glow = v; });
 $('set-shade').addEventListener('change', function () { S.shade = $('set-shade').checked; syncSliders(); });
 $('set-stars').addEventListener('change', function () { S.stars = $('set-stars').checked; syncSliders(); });
+// the cinema's switches: the atmosphere, the sparks, the lens — shafts,
+// streak, ghosts, shimmer, aberration, grain — and the camera's drift
+$('set-atm').addEventListener('change', function () { S.atm = $('set-atm').checked; syncSliders(); });
+$('set-sparks').addEventListener('change', function () { S.sparks = $('set-sparks').checked; syncSliders(); });
+$('set-lens').addEventListener('change', function () { S.lens = $('set-lens').checked; syncSliders(); });
+$('set-drift').addEventListener('change', function () { S.drift = $('set-drift').checked; syncSliders(); });
 window.addEventListener('keydown', function (e) {
   if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON')) return;
   if (e.code === 'Space') { e.preventDefault(); if (sim && sim.phase !== 'settle') togglePause(); }
