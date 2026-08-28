@@ -424,7 +424,6 @@ try {
   fail('The simulation shaders failed to compile on this GPU.<br>' + String(e.message || e).slice(0, 200));
   return;
 }
-var dummy = floatTex(1, 1, new Float32Array([-1, 0, 0, 0]));   // "no particle", for slot samplers not yet filled
 var sky = SH.starSetup(gl, starProg, vao);
 
 var VIEW = CC.view;
@@ -621,10 +620,9 @@ function buildCrater() {
 }
 
 function setStaticUniforms() {
-  var g = grid, u, s;
+  var g = grid, u;
   u = slotProg.u; gl.useProgram(slotProg.p);
-  gl.uniform1i(u.uPos, 0);
-  for (s = 0; s < SLOTS; s++) gl.uniform1i(u['uS' + s], 1 + s);
+  gl.uniform1i(u.uPos, 0); gl.uniform1i(u.uPrev, 1);
   gl.uniform2i(u.uSize, sim.W, sim.H);
   gl.uniform1f(u.uInvCell, 1 / sim.cell);
   gl.uniform1i(u.uGMask, g.G - 1); gl.uniform1i(u.uGShift, g.GShift);
@@ -634,7 +632,7 @@ function setStaticUniforms() {
 
   u = simProg.u; gl.useProgram(simProg.p);
   gl.uniform1i(u.uPos, 0); gl.uniform1i(u.uVel, 1); gl.uniform1i(u.uMat, 12); gl.uniform1i(u.uQ, 13);
-  for (s = 0; s < SLOTS; s++) gl.uniform1i(u['uS' + s], 4 + s);
+  gl.uniform1i(u.uSA, 4); gl.uniform1i(u.uSB, 5);
   gl.uniform2i(u.uSize, sim.W, sim.H);
   gl.uniform1f(u.uInvCell, 1 / sim.cell);
   gl.uniform1f(u.uCell, sim.cell);
@@ -643,6 +641,7 @@ function setStaticUniforms() {
   gl.uniform1f(u.uDt, sim.dt);
   gl.uniform1f(u.uTouch, 2 * sim.a);
   gl.uniform1f(u.uLink2, sim.cell * sim.cell);
+  gl.uniform1f(u.uReach2, Math.pow(sim.cell + 0.6 * sim.a, 2));   // as src/nbody.js sets it: the seat's place is a fifteenth of a cell and a step of motion off at most
   gl.uniform1f(u.uK, sim.k);
   gl.uniform1f(u.uC, sim.c);
   gl.uniform1f(u.uInvM, 1);
@@ -675,31 +674,39 @@ function setStaticUniforms() {
 }
 
 // ---------- the passes ----------
+// the seats, as src/nbody.js fills them: a channel of one of two textures
+// each, the seat before read from the other
 function passSlots() {
-  var g = grid, s, k;
+  var g = grid, k;
   gl.useProgram(slotProg.p);
   gl.viewport(0, 0, g.AW, g.AH);
   gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sim.src.pos);
-  gl.clearColor(-1, 0, 0, 0);
+  gl.clearColor(-1, -1, -1, -1);
+  for (k = 0; k < 2; k++) { gl.bindFramebuffer(gl.FRAMEBUFFER, g.fbo[k]); gl.clear(gl.COLOR_BUFFER_BIT); }
+  gl.activeTexture(gl.TEXTURE1);
   for (k = 0; k < SLOTS; k++) {
-    gl.bindFramebuffer(gl.FRAMEBUFFER, g.fbo[k]);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    for (s = 0; s < SLOTS; s++) { gl.activeTexture(gl.TEXTURE1 + s); gl.bindTexture(gl.TEXTURE_2D, s < k ? g.slot[s] : dummy); }
+    var ch = k >> 1;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, g.fbo[k & 1]);
+    gl.colorMask(ch === 0, ch === 1, ch === 2, ch === 3);
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    gl.bindTexture(gl.TEXTURE_2D, g.slot[(k - 1) & 1]);
     gl.uniform1i(slotProg.u.uK, k);
     gl.drawArrays(gl.POINTS, 0, sim.N);
   }
+  gl.colorMask(true, true, true, true);
   gl.disable(gl.DEPTH_TEST); gl.depthMask(false);
 }
 
 function passSim(settle, gdt) {
-  var g = grid, u = simProg.u, s;
+  var g = grid, u = simProg.u;
   gl.useProgram(simProg.p);
   gl.bindFramebuffer(gl.FRAMEBUFFER, sim.dst.fbo);
   gl.viewport(0, 0, sim.W, sim.H);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sim.src.pos);
   gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, sim.src.vel);
-  for (s = 0; s < SLOTS; s++) { gl.activeTexture(gl.TEXTURE4 + s); gl.bindTexture(gl.TEXTURE_2D, g.slot[s]); }
+  gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, g.slot[0]);
+  gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D, g.slot[1]);
   gl.activeTexture(gl.TEXTURE12); gl.bindTexture(gl.TEXTURE_2D, sim.mat);
   gl.activeTexture(gl.TEXTURE13); gl.bindTexture(gl.TEXTURE_2D, sim.src.q);
   gl.uniform1f(u.uSettle, settle ? 1 : 0);

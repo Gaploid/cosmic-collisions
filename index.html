@@ -69,7 +69,7 @@
 </div>
 <div class="hud" id="hud-report" hidden></div>
 <div class="hud" id="hud-help">drag — rotate &nbsp;·&nbsp; wheel — zoom &nbsp;·&nbsp; space — pause &nbsp;·&nbsp; r — restart &nbsp;·&nbsp; f — follow</div>
-<div class="hud" id="hud-stat"><strong id="hud-clock">T+ 0h 00m</strong><span id="hud-fps"></span></div>
+<div class="hud" id="hud-stat"><strong id="hud-clock">T− 0h 00m</strong><span id="hud-fps"></span></div>
 <div class="hud busy" id="hud-load"><span id="hud-load-text">building</span><div class="bar"><i id="hud-load-bar"></i></div></div>
 </div>
 <div id="fallback">WebGL 2 is not available in this browser —<br>the simulation cannot run.</div>
@@ -225,9 +225,10 @@ function loading() {
 
 // ---------- HUD ----------
 function fmtMass(x) { return x.toFixed(3) + ' M⊕'; }
+// zero is first touch: the approach counts down to it, the rest counts up
 function fmtTime(t) {
-  var sec = t * T_UNIT, hh = Math.floor(sec / 3600), mm = Math.floor((sec % 3600) / 60);
-  return 'T+ ' + hh + 'h ' + (mm < 10 ? '0' : '') + mm + 'm';
+  var sec = Math.abs(t) * T_UNIT, hh = Math.floor(sec / 3600), mm = Math.floor((sec % 3600) / 60);
+  return 'T' + (t < 0 ? '−' : '+') + ' ' + hh + 'h ' + (mm < 10 ? '0' : '') + mm + 'm';
 }
 function fmtCount(n) { return n >= 1e6 ? (n / 1e6).toFixed(n % 1e6 ? 1 : 0) + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'k' : String(n); }
 // The report is rebuilt sixty times a second and changes perhaps twice a
@@ -254,7 +255,7 @@ function hud() {
   else if (sim.t - sim.impactT < 2.5) sub += ' · impact';
   else sub += ' · aftermath';
   $('hud-sub').textContent = sub;
-  $('hud-clock').textContent = sim ? fmtTime(sim.t) : 'T+ 0h 00m';
+  $('hud-clock').textContent = sim ? fmtTime(sim.t) : 'T− 0h 00m';
   $('hud-fps').textContent = sim ? fmtCount(sim.N) + (DEV.compact ? '' : ' bodies') + ' · ' + Math.round(sim.vc * V_UNIT) + ' km/s · ' + fps + ' fps' : '';
   loading();
   var rep = $('hud-report');
@@ -415,7 +416,8 @@ window.addEventListener('keydown', function (e) {
   else if (e.code === 'KeyF') S.follow = !S.follow;   // the camera rides the planet; the key is the whole of it
 });
 
-// for scripted screenshots: run straight to a sim time (in time units) and hold
+// for scripted screenshots: run straight to a sim time (in time units, zero
+// at first touch) and hold
 window.__impact = {
   get sim() { return sim; },
   get report() { return report; },
@@ -489,6 +491,16 @@ window.__impact = {
         qs.forEach(function (q, i) { out[items[i][0]] = +(gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6 / reps).toFixed(3); });
         resolve(out);
       })();
+    });
+  },
+  // GPU time per stage of the picture, averaged over reps
+  renderStages: function (reps) {
+    reps = reps || 10;
+    VIEW.profileStages = true;
+    for (var r = 0; r < reps; r++) render();
+    VIEW.profileStages = false;
+    return new Promise(function (resolve) {
+      (function poll() { var st = VIEW.stageTimes(); if (!st) { setTimeout(poll, 50); return; } for (var k in st) st[k] = +(st[k] / reps).toFixed(3); resolve(st); })();
     });
   },
   runTo: function (t) {

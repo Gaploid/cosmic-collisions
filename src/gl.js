@@ -64,21 +64,26 @@ function fboFor(tex, depthRb) {
   return f;
 }
 
-// the contact grid: G³ hashed cells × SLOTS textures of particle indices
+// the contact grid: G³ hashed cells, SLOTS seats each, in two RGBA32F
+// textures — the even seats in the first, the odd in the second, so that a
+// pass that reads the seat before its own never reads the texture it writes.
+// A seat is a bit pattern carried in the float: the particle's index in the
+// low 18 bits, where it sat in the cell in the 12 above, and a bit that
+// keeps the pattern a normal float; −1 is an empty seat (see GLSL_SLOTS)
 function makeGrid(G) {
   var SX = G === 128 ? 16 : 8;
   var g = { G: G, SX: SX, GShift: Math.log2(G), SXShift: Math.log2(SX), AW: SX * G, AH: (G / SX) * G, slot: [], fbo: [], depth: gl.createRenderbuffer() };
   gl.bindRenderbuffer(gl.RENDERBUFFER, g.depth);
   gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, g.AW, g.AH);
-  for (var k = 0; k < SLOTS; k++) {
-    g.slot.push(floatTex(g.AW, g.AH, null, gl.R32F, gl.FLOAT, gl.RED));
+  for (var k = 0; k < 2; k++) {
+    g.slot.push(floatTex(g.AW, g.AH, null));
     g.fbo.push(fboFor(g.slot[k], g.depth));
   }
   return g;
 }
 function freeGrid(g) {
   if (!g) return;
-  for (var k = 0; k < SLOTS; k++) { gl.deleteTexture(g.slot[k]); gl.deleteFramebuffer(g.fbo[k]); }
+  for (var k = 0; k < g.slot.length; k++) { gl.deleteTexture(g.slot[k]); gl.deleteFramebuffer(g.fbo[k]); }
   gl.deleteRenderbuffer(g.depth);
 }
 

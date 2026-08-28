@@ -16,7 +16,7 @@ var floatTex, simTarget, freeTarget, fboFor, makeGrid, freeGrid;
 // the maths and the body builder are plain functions, loaded before this
 // file, and the pairwise table below wants the random at load
 var mulberry = CC.math.mulberry, ball = CC.bodies.ball, maclaurin = CC.bodies.maclaurin, turn = CC.bodies.turn;
-var simProg, slotProg, depProg, coarseProg, monoProg, cellProg, rigidProg, diagProg, ppGatherProg, ppForceProg, permProg;
+var simProg, slotProg, depProg, coarseProg, monoProg, farProg, cellProg, rigidProg, diagProg, ppGatherProg, ppForceProg, permProg;
 var SLOTS = CC.SLOTS, N_CHOICES = CC.N_CHOICES;
 var T_UNIT = 805, V_UNIT = 7.91;
 var E_KG = 6.256e7;                         // GM⊕/R⊕: the energy unit per kilogram, J/kg
@@ -30,12 +30,14 @@ var L_EM = 0.1163;                          // the Earth–Moon system's angular
 var JAM = 0.96;
 var FL = 6.0, FH = 2 * FL / 64;             // gravity mesh: 64³ cells over ±6 R⊕
 var PP_CAP = 8192, PP_W = 128, PP_H = 64;   // the loose material the pairwise pass can take, as a 128×64 list
+var PP_SLICES = 4;                          // the pairwise sum is done in this many parts, one atlas row of seats each (PPFORCE_FS and its readers count on four)
 var PP_CUT = 5 * FH;                        // how far the pairwise correction reaches: five cells
+var SEAT_SLACK = 0.6;                       // in radii: how far a particle may be from where its seat says — a fifteenth of a cell and a step of motion
 
 // ---------- the meshes ----------
 // the gravity mesh, the loose list, and the contact grid: GL objects, so
 // they are made at init() rather than at load
-var dummy = null, pm = null, pp = null, grid = null;
+var pm = null, pp = null, grid = null;
 
 // The mesh's own force between two particles by their distance, for the
 // pairwise pass to subtract. The two are put on the grid (a random offset, a
@@ -204,7 +206,7 @@ function build(opt) {
     mat: floatTex(W, H, matR, gl.R32F, gl.FLOAT, gl.RED), matR: matR,
     home: floatTex(W, H, home), homeArr: home,
     diag: floatTex(W, H, null), ref: null,
-    t: 0, phase: 'settle', settleLeft: settle, settleTotal: settle, impactT: -1, com1: [0, 0, 0], stepNo: 0,
+    t: -approachTime(rel, M, Re1 + Re2 + 2 * a), phase: 'settle', settleLeft: settle, settleTotal: settle, impactT: -1, com1: [0, 0, 0], stepNo: 0,
     damp: Math.exp(-dt * 12), soft: false, gen: ++gen,
     // the temperature a mantle particle's heat makes: each side of a contact
     // books the pair's whole dissipation, so half of it is that side's
@@ -237,10 +239,9 @@ function build(opt) {
 // Uniforms that hold for the whole run are set once here; the passes below
 // only bind targets and textures and touch what changes.
 function setStaticUniforms() {
-  var g = grid, u, s;
+  var g = grid, u;
   u = slotProg.u; gl.useProgram(slotProg.p);
-  gl.uniform1i(u.uPos, 0);
-  for (s = 0; s < SLOTS; s++) gl.uniform1i(u['uS' + s], 1 + s);
+  gl.uniform1i(u.uPos, 0); gl.uniform1i(u.uPrev, 1);
   gl.uniform2i(u.uSize, sim.W, sim.H);
   gl.uniform1f(u.uInvCell, 1 / sim.cell);
   gl.uniform1i(u.uGMask, g.G - 1); gl.uniform1i(u.uGShift, g.GShift);
@@ -257,9 +258,10 @@ function setStaticUniforms() {
 
   gl.useProgram(coarseProg.p); gl.uniform1i(coarseProg.u.uFine, 0);
   gl.useProgram(monoProg.p); gl.uniform1i(monoProg.u.uCoarse, 0);
+  gl.useProgram(farProg.p); gl.uniform1i(farProg.u.uCoarse, 0);
 
   u = cellProg.u; gl.useProgram(cellProg.p);
-  gl.uniform1i(u.uFine, 0); gl.uniform1i(u.uCoarse, 1);
+  gl.uniform1i(u.uFine, 0); gl.uniform1i(u.uCoarse, 1); gl.uniform1i(u.uFarA, 2); gl.uniform1i(u.uFarT0, 3); gl.uniform1i(u.uFarT1, 4);
   gl.uniform1f(u.uH, FH);
   gl.uniform1f(u.uL, FL);
   gl.uniform1f(u.uEps2, 0.5 * FH * FH);
@@ -268,7 +270,7 @@ function setStaticUniforms() {
   u = simProg.u; gl.useProgram(simProg.p);
   gl.uniform1i(u.uPos, 0); gl.uniform1i(u.uVel, 1); gl.uniform1i(u.uForce, 2); gl.uniform1i(u.uMono, 3); gl.uniform1i(u.uMat, 12); gl.uniform1i(u.uQ, 13);
   gl.uniform1i(u.uPPSlot, 14); gl.uniform1i(u.uPPForce, 15);
-  for (s = 0; s < SLOTS; s++) gl.uniform1i(u['uS' + s], 4 + s);
+  gl.uniform1i(u.uSA, 4); gl.uniform1i(u.uSB, 5);
   gl.uniform2i(u.uSize, sim.W, sim.H);
   gl.uniform1f(u.uInvCell, 1 / sim.cell);
   gl.uniform1f(u.uCell, sim.cell);
@@ -281,6 +283,7 @@ function setStaticUniforms() {
   gl.uniform1f(u.uEps2, FH * FH);
   gl.uniform1f(u.uTouch, 2 * sim.a);
   gl.uniform1f(u.uLink2, sim.cell * sim.cell);
+  gl.uniform1f(u.uReach2, Math.pow(sim.cell + SEAT_SLACK * sim.a, 2));
   gl.uniform1f(u.uK, sim.k);
   gl.uniform1f(u.uC, sim.c);
   gl.uniform1f(u.uInvM, 1 / sim.m);
@@ -298,7 +301,7 @@ function setStaticUniforms() {
   u = diagProg.u; gl.useProgram(diagProg.p);
   gl.uniform1i(u.uPos, 0); gl.uniform1i(u.uQ, 1); gl.uniform1i(u.uForce, 2); gl.uniform1i(u.uMono, 3);
   gl.uniform1i(u.uPPSlot, 12); gl.uniform1i(u.uPPForce, 13);
-  for (s = 0; s < SLOTS; s++) gl.uniform1i(u['uS' + s], 4 + s);
+  gl.uniform1i(u.uSA, 4); gl.uniform1i(u.uSB, 5);
   gl.uniform2i(u.uSize, sim.W, sim.H);
   gl.uniform1f(u.uInvCell, 1 / sim.cell);
   gl.uniform1i(u.uGMask, g.G - 1); gl.uniform1i(u.uGShift, g.GShift);
@@ -311,33 +314,40 @@ function setStaticUniforms() {
   u = ppGatherProg.u; gl.useProgram(ppGatherProg.p);
   gl.uniform1i(u.uPos, 0); gl.uniform1i(u.uMat, 1); gl.uniform1i(u.uIndex, 2);
   gl.uniform2i(u.uSize, sim.W, sim.H);
+  gl.uniform1f(u.uInvH, 1 / FH);
+  gl.uniform1f(u.uL, FL);
   u = permProg.u; gl.useProgram(permProg.p);
   gl.uniform1i(u.uPos, 0); gl.uniform1i(u.uVel, 1); gl.uniform1i(u.uAux, 2); gl.uniform1i(u.uQ, 3); gl.uniform1i(u.uPerm, 4);
   gl.uniform2i(u.uSize, sim.W, sim.H);
   u = ppForceProg.u; gl.useProgram(ppForceProg.p);
-  gl.uniform1i(u.uList, 0);
+  gl.uniform1i(u.uList, 0); gl.uniform1i(u.uTab, 1);
   gl.uniform1f(u.uGm, sim.m);
   gl.uniform1f(u.uCut, PP_CUT);
   gl.uniform1f(u.uA2, sim.a * sim.a);
-  gl.uniform1fv(u['uTab[0]'], PP_TAB.f);
-  gl.uniform1fv(u['uPot[0]'], PP_TAB.p);
 }
 
-// 1. contact cells, one slot per pass
+// 1. contact cells, one seat per pass: seat k is a channel of one of the
+//    two textures, written under a colour mask, and read the seat before it
+//    from the other; both are emptied once, the depth before every pass
 function passSlots() {
-  var g = grid, s, k;
+  var g = grid, k;
   gl.useProgram(slotProg.p);
   gl.viewport(0, 0, g.AW, g.AH);
   gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sim.src.pos);
-  gl.clearColor(-1, 0, 0, 0);
+  gl.clearColor(-1, -1, -1, -1);
+  for (k = 0; k < 2; k++) { gl.bindFramebuffer(gl.FRAMEBUFFER, g.fbo[k]); gl.clear(gl.COLOR_BUFFER_BIT); }
+  gl.activeTexture(gl.TEXTURE1);
   for (k = 0; k < SLOTS; k++) {
-    gl.bindFramebuffer(gl.FRAMEBUFFER, g.fbo[k]);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    for (s = 0; s < SLOTS; s++) { gl.activeTexture(gl.TEXTURE1 + s); gl.bindTexture(gl.TEXTURE_2D, s < k ? g.slot[s] : dummy); }
+    var ch = k >> 1;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, g.fbo[k & 1]);
+    gl.colorMask(ch === 0, ch === 1, ch === 2, ch === 3);
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    gl.bindTexture(gl.TEXTURE_2D, g.slot[(k - 1) & 1]);   // the seat before; for the first pass the other texture, unread, so the sampler has its kind of texture
     gl.uniform1i(slotProg.u.uK, k);
     gl.drawArrays(gl.POINTS, 0, sim.N);
   }
+  gl.colorMask(true, true, true, true);
   gl.disable(gl.DEPTH_TEST); gl.depthMask(false);
 }
 
@@ -370,19 +380,27 @@ function passCoarse() {
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 }
 
-// 5. gravity at every occupied cell
+// 5. the far field of every block, 6. gravity at every occupied cell
 function passCell() {
+  gl.useProgram(farProg.p);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, pm.farFbo);
+  gl.viewport(0, 0, 64, 64);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, pm.coarse);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
   gl.useProgram(cellProg.p);
   gl.bindFramebuffer(gl.FRAMEBUFFER, pm.forceFbo);
   gl.viewport(0, 0, 512, 513);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, pm.fine);
   gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, pm.coarse);
+  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, pm.farA);
+  gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, pm.farT0);
+  gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, pm.farT1);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 }
 
 // 6. the particles: read src, write dst, swap
 function passSim(settle, kick, gdt) {
-  var g = grid, u = simProg.u, s;
+  var g = grid, u = simProg.u;
   gl.useProgram(simProg.p);
   gl.bindFramebuffer(gl.FRAMEBUFFER, sim.dst.fbo);
   gl.viewport(0, 0, sim.W, sim.H);
@@ -390,7 +408,8 @@ function passSim(settle, kick, gdt) {
   gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, sim.src.vel);
   gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, pm.force);
   gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, pm.mono);
-  for (s = 0; s < SLOTS; s++) { gl.activeTexture(gl.TEXTURE4 + s); gl.bindTexture(gl.TEXTURE_2D, g.slot[s]); }
+  gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, g.slot[0]);
+  gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D, g.slot[1]);
   gl.activeTexture(gl.TEXTURE12); gl.bindTexture(gl.TEXTURE_2D, sim.mat);
   gl.activeTexture(gl.TEXTURE13); gl.bindTexture(gl.TEXTURE_2D, sim.src.q);
   gl.activeTexture(gl.TEXTURE14); gl.bindTexture(gl.TEXTURE_2D, pp.slot);
@@ -409,7 +428,7 @@ function passSim(settle, kick, gdt) {
 // the read-outs for the books, from cells and a mesh built for the positions
 // as they are right now — so the seat check is exact and the potential current
 function passDiag() {
-  var g = grid, s;
+  var g = grid;
   passSlots();
   passDeposit(); passCoarse(); passCell(); passPP();
   gl.useProgram(diagProg.p);
@@ -419,14 +438,15 @@ function passDiag() {
   gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, sim.src.q);
   gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, pm.force);
   gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, pm.mono);
-  for (s = 0; s < SLOTS; s++) { gl.activeTexture(gl.TEXTURE4 + s); gl.bindTexture(gl.TEXTURE_2D, g.slot[s]); }
+  gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, g.slot[0]);
+  gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D, g.slot[1]);
   gl.activeTexture(gl.TEXTURE12); gl.bindTexture(gl.TEXTURE_2D, pp.slot);
   gl.activeTexture(gl.TEXTURE13); gl.bindTexture(gl.TEXTURE_2D, pp.force);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 }
 
 // 7. the loose material, pairwise: the list's positions gathered, then every
-//    seat against the whole list
+//    seat against the whole list, a slice of it per row of the force atlas
 function passPP() {
   if (!pp.count) return;
   gl.useProgram(ppGatherProg.p);
@@ -438,7 +458,9 @@ function passPP() {
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   gl.useProgram(ppForceProg.p);
   gl.bindFramebuffer(gl.FRAMEBUFFER, pp.forceFbo);
+  gl.viewport(0, 0, PP_W, PP_H * PP_SLICES);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, pp.list);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, pp.tab);
   gl.uniform1i(ppForceProg.u.uCount, pp.count);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 }
@@ -487,6 +509,22 @@ function settleSome(n) {
 function centres(r) {
   var M = sim.M, M1 = sim.M1, M2 = sim.M2;
   return [[-r[0] * M2 / M, -r[1] * M2 / M, -r[2] * M2 / M], [r[0] * M1 / M, r[1] * M1 / M, r[2] * M1 / M]];
+}
+// how long the rigid flight takes from the start line to the equators
+// touching: rigidStep's own leapfrog at its 1× step, run once at build, so
+// the clock counts down to contact and reads zero when it happens
+function approachTime(rel, M, touch) {
+  var r = [rel.r[0], rel.r[1], rel.r[2]], v = [rel.v[0], rel.v[1], rel.v[2]], h = 0.01 / 8, t = 0;
+  function acc() { var d2 = r[0] * r[0] + r[1] * r[1] + r[2] * r[2], f = -M * Math.pow(d2, -1.5); return [r[0] * f, r[1] * f, r[2] * f]; }
+  var a = acc();
+  while (Math.hypot(r[0], r[1], r[2]) > touch && t < 200) {
+    v[0] += a[0] * h * 0.5; v[1] += a[1] * h * 0.5; v[2] += a[2] * h * 0.5;
+    r[0] += v[0] * h; r[1] += v[1] * h; r[2] += v[2] * h;
+    a = acc();
+    v[0] += a[0] * h * 0.5; v[1] += a[1] * h * 0.5; v[2] += a[2] * h * 0.5;
+    t += h;
+  }
+  return t;
 }
 function rigidStep(dtF) {
   var r = sim.rel.r, v = sim.rel.v, M = sim.M, M1 = sim.M1, M2 = sim.M2;
@@ -883,28 +921,41 @@ function init(o) {
   depProg = program(SH.DEP_VS, SH.DEP_FS);
   coarseProg = program(SH.QUAD_VS, SH.COARSE_FS);
   monoProg = program(SH.QUAD_VS, SH.MONO_FS);
+  farProg = program(SH.QUAD_VS, SH.FAR_FS);
   cellProg = program(SH.QUAD_VS, SH.CELL_FS);
   rigidProg = program(SH.QUAD_VS, SH.RIGID_FS);
   diagProg = program(SH.QUAD_VS, SH.DIAG_FS);
   ppGatherProg = program(SH.QUAD_VS, SH.PPGATHER_FS);
   ppForceProg = program(SH.QUAD_VS, SH.PPFORCE_FS);
   permProg = program(SH.QUAD_VS, SH.PERM_FS);
-  dummy = floatTex(1, 1, new Float32Array([-1, 0, 0, 0]));   // "no particle", for slot samplers not yet filled
   pm = {
     fine: floatTex(512, 513, null, floatBlend ? gl.RGBA32F : gl.RGBA16F, floatBlend ? gl.FLOAT : gl.HALF_FLOAT),   // 64³: Σ w·xyz, Σ w — blendable; a scratch row below
     coarse: floatTex(64, 64, null),                              // 16³
     mono: floatTex(1, 1, null),
+    farA: floatTex(64, 64, null), farT0: floatTex(64, 64, null), farT1: floatTex(64, 64, null),   // each block's far field: acceleration and potential, and the tidal tensor in six
     force: floatTex(512, 513, null)                              // acceleration and potential at every fine cell; the scratch row copied
   };
   pm.fineFbo = fboFor(pm.fine); pm.coarseFbo = fboFor(pm.coarse); pm.monoFbo = fboFor(pm.mono); pm.forceFbo = fboFor(pm.force);
+  pm.farFbo = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, pm.farFbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, pm.farA, 0);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, pm.farT0, 0);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT2, gl.TEXTURE_2D, pm.farT1, 0);
+  gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2]);
+  if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error('far framebuffer incomplete');
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
   // the loose material's pairwise pass: a seat per particle (-1 for none), the
   // particle in each seat, the seats' positions gathered, the correction found
   pp = {
     index: floatTex(PP_W, PP_H, null, gl.R32F, gl.FLOAT, gl.RED),
-    list: floatTex(PP_W, PP_H, null), force: floatTex(PP_W, PP_H, null),
-    slot: null, slotArr: null, indexArr: new Float32Array(PP_CAP), count: 0, loose: 0
+    list: floatTex(PP_W, PP_H, null), force: floatTex(PP_W, PP_H * PP_SLICES, null),
+    tab: null, slot: null, slotArr: null, indexArr: new Float32Array(PP_CAP), count: 0, loose: 0
   };
+  // the mesh's pair force and potential by distance, for the pairwise pass
+  var tab = new Float32Array(PP_TAB.f.length * 2);
+  for (var i = 0; i < PP_TAB.f.length; i++) { tab[i * 2] = PP_TAB.f[i]; tab[i * 2 + 1] = PP_TAB.p[i]; }
+  pp.tab = floatTex(PP_TAB.f.length, 1, tab, gl.RG32F, gl.FLOAT, gl.RG);
   pp.listFbo = fboFor(pp.list); pp.forceFbo = fboFor(pp.force);
 
 }
@@ -914,12 +965,20 @@ CC.nbody = {
   init: init, build: build,
   step: step, settleSome: settleSome, rigidStep: rigidStep, analyze: analyze, collect: collect,
   sortNow: function () { analyses = 0; analyze(true); return report; },
+  // for the console: a pass's program replaced by a variant, to time it in place
+  setProg: function (name, vs, fs) {
+    var p = CC.gl.program(vs, fs);
+    if (name === 'sim') simProg = p; else if (name === 'slot') slotProg = p; else if (name === 'dep') depProg = p; else if (name === 'cell') cellProg = p; else if (name === 'far') farProg = p; else if (name === 'pp') ppForceProg = p;
+    setStaticUniforms();
+  },
   passes: { slots: passSlots, deposit: passDeposit, coarse: passCoarse, cell: passCell, pp: passPP, sim: passSim, diag: passDiag },
   get sim() { return sim; },
   get report() { return report; },
   get pending() { return pending; },
   get analyzedAt() { return analyzedAt; },
   get pm() { return pm; },
+  get grid() { return grid; },
+  get progs() { return { sim: simProg, slot: slotProg, dep: depProg, cell: cellProg, far: farProg, pp: ppForceProg, gather: ppGatherProg }; },
   get pp() { return pp; },
   get state() { return { analyzing: analyzing, pending: !!pending, worker: !!worker, analyses: analyses, analyzedAt: analyzedAt, stepNo: sim && sim.stepNo, waitStatus: pending ? gl.clientWaitSync(pending.sync, 0, 0) : null }; },
   set meshEvery(n) { MESH_EVERY = n; },

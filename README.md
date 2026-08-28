@@ -39,60 +39,28 @@ disk and the re-accretion are all there.
 
 ## Chicxulub
 
-**The crater.** A cylinder of the Yucatán platform — three kilometres of
-carbonate over crystalline basement, its wall and floor held still because the
-rest of the world is not in the box — and a carbonaceous asteroid arriving at
-60° from the north-east at 20 km/s. The ground erupts, the curtain goes up as an
-inverted cone, and the transient bowl opens in about eighty seconds before
-collapsing into the wider, shallower crater that is there today. Presets run
-from a 1 km rock to a 30 km one; the readout gives the energy, the crater dug
-beside the crater the scaling asks for, what was thrown past the rim, the shock
-melt and the seismic magnitude.
+**The crater.** Yucatán carbonate over crystalline basement, and a carbonaceous
+asteroid at 20 km/s, 60° from the north-east: the curtain goes up, and the
+transient bowl opens in about eighty seconds. Presets run from 1 km to 30 km;
+the readout gives energy, ejecta, melt, seismic magnitude, and the crater dug
+beside the one the scaling asks for.
 
-**The planet.** The Earth the giant impact is made of — a hundred thousand
-grains under their own gravity, on the same engine — and a rock thrown at it.
-This is the view where the surface breaks, and the one that has to be honest
-about why it mostly cannot: at 131k grains Earth's grain is 218 km across, and
-Chicxulub's rock was 14. The rock is always built at its true mass and drawn as
-however many grains that is worth — one, when it is worth less than one — so the
-*chicxulub* button does exactly what a 14 km rock does to a planet, which is
-nothing anyone can see, and says so. The surface starts to go a few hundred
-kilometres up: *1000 km* is a white wound and a spray of ejecta into orbit,
-*2000 km* a basin the size of a continent, and above that it hands over to the
-giant-impact page, whose smallest rock is 0.02 M⊕.
+**The planet.** The Earth of the giant impact, with a rock thrown at it — and
+honest about what it cannot show: a grain is 218 km across and the rock was 14,
+so it is drawn as the one grain it is worth, does nothing, and says so. The
+surface starts to break a few hundred kilometres up; past 2000 km the
+giant-impact page takes over.
 
-**The first day.** The whole planet, and the same impact seen from far enough
-away that the crater is a dot. Nothing here deforms, and a view that promised
-otherwise would be lying: the rock is a 1.6-billionth of Earth's mass. What
-flies is what came out of the hole — a plume that leaves faster than the
-atmosphere can hold it, arcs over half a world, and is coming down everywhere
-within two hours; that, not the crater, is what ended the Cretaceous. Earth is a
-shell of frozen particles drawn as a globe with a graticule instead of
-coastlines, and the motes are tracers rather than rocks: nothing here is to
-scale except the trajectories, which are exact.
+**The first day.** The crater as a dot. Nothing deforms, but the plume outruns
+the atmosphere, arcs over half a world and is down everywhere within two hours —
+that, not the crater, is what ended the Cretaceous.
 
-**Where the numbers come from, and where they do not.** A contact model has no
-shock and no vapour, so it cannot be asked what a 20 km/s impact does in its
-first second; what comes out of that second is given to it instead — an
-excavation flow radial from a buried point source, with Housen & Holsapple's
-speeds and Maxwell's Z-model directions, going to nothing at the transient
-radius π-group scaling gives, so the hole is the right size by construction.
-Everything after is the sim's own and is the part worth watching, and the
-readout prints the crater it dug beside the one the scaling asked for — across
-the five presets they agree to between 0.7 and 1.2. The globe's plume is
-anchored to the 25 trillion tonnes Chicxulub threw clear, its motes are not
-slowed by the air so their energy is booked as delivered to the atmosphere, and
-the sulfur is not from the run at all: that needs a hydrocode, so the readout
-quotes the published range and says whose.
-
-The numbers it stands on: Collins, Melosh & Marcus 2005 (*Meteoritics &
-Planetary Science* **40**, 817) for the crater scaling and the seismic
-magnitude; Housen & Holsapple 2011 for the ejecta velocities; Melosh 1989 §5.4
-for the Z-model; Collins et al. 2020 (*Nature Communications* **11**, 1480) for
-the 45–60° trajectory from the north-east; Gulick et al. 2013 and IODP-ICDP
-Expedition 364 for the target and the peak ring; Fischer-Gödde et al. 2024
-(*Science* **385**, 752) for the carbonaceous impactor; Artemieva & Morgan 2017
-and Gulick et al. 2025 for the two ends of the sulfur estimate.
+**The numbers.** A contact model has no shock, so its first second is given to
+it: an excavation flow with Housen & Holsapple's speeds and Maxwell's Z-model
+directions, stopping at the transient radius π-group scaling gives. Everything
+after is the sim's own; the sulfur wants a hydrocode and is quoted, not run.
+Sources, as on the page: Collins 2005 and 2020, Housen & Holsapple 2011, Melosh
+1989, Expedition 364, Fischer-Gödde 2024.
 
 ## Tech
 
@@ -100,8 +68,9 @@ A page per scenario over a shared engine in `src/`, wired with plain script
 tags — no dependencies, no build step, and a page still opens from disk. It is
 WebGL 2 with no compute shaders to lean on, so the hard parts are tricks:
 contacts from a hashed grid filled by depth-peeling, gravity from a 64³ particle
-mesh with the loose material corrected pairwise against it, P³M-style, so
-moonlets bind instead of smearing. Its bodies are onions of Fibonacci-spiral
+mesh — its far field block to block, so it pushes nothing — with the loose
+material corrected pairwise against it, P³M-style, so moonlets bind instead of
+smearing. Its bodies are onions of Fibonacci-spiral
 shells, relaxed and then crept into equilibrium so that nothing pops out of the
 surface; symplectic Euler, Morton order, and books on momentum and energy that
 caught most of what was wrong. The picture is screen-space fluid rendering —
@@ -127,6 +96,30 @@ credit.
 
 Broad strokes, newest first; the commit history tells each one in full.
 
+- **2026-08-28 — The Moon stays.** The Moon the theia run makes — 1.3 M☾ at
+  3.5–5 R⊕, outside the Roche limit, where the real one formed — came apart
+  after a hundred hours: the mesh's far field pushed the system 18 m/s, a
+  radius in that time, and the orbit reached the edge of the box, where the
+  pairwise pass subtracted a mesh force that was not there; and the contact
+  grid's wrap laid the moon's cells over the planet's limb once an orbit,
+  filling them past their seats. The far field is summed block to block with
+  the tidal tensor now, a pair with a side off the mesh gets the whole of
+  Newton, and the wrap's images are skewed off the plane: at 100 h the drift is
+  0.7 m/s and the Moon is at a = 4.6 R⊕, e = 0.12.
+- **2026-08-28 — Zero at first touch.** The clock counted from the start line,
+  so the bodies met at T+ 1h. It counts down to contact now — the rigid
+  flight is run once at build to learn how long it takes — and up from
+  there, as Chicxulub's does.
+- **2026-08-28 — Twice the step.** A step at 131k from 2.1 ms to 1.1 in
+  sequence, at 262k from 3.7 to 1.9; 4× runs at 41–48 fps where it ran at
+  19–25, and 2× at 262k at 50 where it ran at 26. The contact cells' eight seat
+  textures became two, each seat carrying where its particle sat so most
+  candidates are let go unfetched; the pairwise pass's tables moved from
+  uniform arrays, which serve a divergent index one thread at a time, into a
+  texture, and its sum into four slices; the mesh deposit takes the particles
+  in a scrambled order, so the ROP is not fed a cell's blends in a row. The
+  seats come out the same to the bit; the deposit sums in another order, which
+  moves the books at the fifth digit.
 - **2026-08-28 — The light on the second body.** A hot body's light shaded
   the skin by each grain's own normal, so a lit face came out as a honeycomb of
   crescents that slid over it as the camera turned; it goes by the smoothed

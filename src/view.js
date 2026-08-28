@@ -136,6 +136,16 @@ function wireCamera() {
 }
 
 // ---------- drawing ----------
+// stage timing, for the console: profileStages = true wraps each stage of
+// render() in its own timer query, stageTimes() reads them back
+var stageQ = [], stageExt = null, profileStages = false, curQ = null;
+function mark(name) {
+  if (!profileStages) return;
+  if (!stageExt) stageExt = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+  if (curQ) gl.endQuery(stageExt.TIME_ELAPSED_EXT);
+  curQ = null;
+  if (name) { curQ = gl.createQuery(); gl.beginQuery(stageExt.TIME_ELAPSED_EXT, curQ); stageQ.push([name, curQ]); }
+}
 var SUN = (function () { var v = [-0.6, 0.45, 0.6], l = Math.hypot(v[0], v[1], v[2]); return [v[0] / l, v[1] / l, v[2] / l]; })();
 function render() {
   var w = hdr.w, h = hdr.h;
@@ -158,6 +168,7 @@ function render() {
     return [view[0] * x + view[4] * y + view[8] * z + view[12], view[1] * x + view[5] * y + view[9] * z + view[13], view[2] * x + view[6] * y + view[10] * z + view[14]];
   };
 
+  mark('bodies');
   if (sim) {
     // 1. the bodies as sphere impostors: material, heat, depth, home
     var g = gProg.u;
@@ -201,6 +212,7 @@ function render() {
     //    period. So a coarse comb is preceded by a dense pass, a tap a
     //    pixel over the comb's own spacing, that turns the edges into ramps
     //    the comb can cross smoothly
+    mark('blur');
     var rpx = sim.a * px / cam.dist * 2.0;
     var taps = Math.max(1, Math.min(12, Math.round(rpx)));
     var step = Math.max(1, rpx / taps), pre = step > 1.5 ? Math.ceil(step) : 0;
@@ -229,6 +241,7 @@ function render() {
 
   // the sky, at a quarter of the size: the band is soft, and the noise it
   // is made of would cost at full
+  mark('sky');
   gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND);
   gl.bindFramebuffer(gl.FRAMEBUFFER, skyT.fbo);
   gl.viewport(0, 0, bloomW, bloomH);
@@ -299,6 +312,7 @@ function render() {
   }
 
   // 3. compose: the lit skin, then the sky and the sun behind it, and the stars
+  mark('shade');
   gl.bindFramebuffer(gl.FRAMEBUFFER, hdr.fbo);
   gl.viewport(0, 0, w, h);
   gl.clearColor(0, 0, 0, 1);
@@ -345,6 +359,7 @@ function render() {
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.ONE, gl.ONE);
   // the sky, and the sun in it when it is ahead of the camera
+  mark('sun+stars');
   var su = sunProg.u;
   gl.useProgram(sunProg.p);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, skyT.tex);
@@ -371,6 +386,7 @@ function render() {
 
   // 4. bloom: the bright part at a quarter size, a narrow blur then a wide
   //    one; then at a sixteenth, the widest
+  mark('bloom');
   gl.viewport(0, 0, bloomW, bloomH);
   gl.useProgram(brightProg.p);
   gl.bindFramebuffer(gl.FRAMEBUFFER, bloomA.fbo);
@@ -409,6 +425,7 @@ function render() {
   }
 
   // 5. the film: tone map with the vignette, then FXAA on the way to the screen
+  mark('tone+fxaa');
   gl.bindFramebuffer(gl.FRAMEBUFFER, ldr.fbo);
   gl.viewport(0, 0, w, h);
   gl.useProgram(toneProg.p);
@@ -432,6 +449,7 @@ function render() {
   gl.uniform2f(fxaaProg.u.uInvRes, 1 / w, 1 / h);
   gl.uniform1f(fxaaProg.u.uOn, dbg ? 0 : LOOK.fxaa);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
+  mark(null);
 }
 
 CC.view = {
@@ -467,6 +485,14 @@ CC.view = {
   cam: cam,
 
   get hdr() { return hdr; },
+  set profileStages(v) { if (v && !profileStages) stageQ = []; profileStages = !!v; },
+  stageTimes: function () {   // null until the GPU has answered
+    var out = {}, i, q;
+    for (i = 0; i < stageQ.length; i++) if (!gl.getQueryParameter(stageQ[i][1], gl.QUERY_RESULT_AVAILABLE)) return null;
+    for (i = 0; i < stageQ.length; i++) { q = stageQ[i]; out[q[0]] = (out[q[0]] || 0) + gl.getQueryParameter(q[1], gl.QUERY_RESULT) / 1e6; gl.deleteQuery(q[1]); }
+    stageQ = [];
+    return out;
+  },
 
   get lights() { return lastLights; },
 

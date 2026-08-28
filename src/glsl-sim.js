@@ -14,73 +14,93 @@ var GLSL_GRID = [
 ].join('\n');
 // The contact grid is a hashed cube of G³ cells (G a power of two), one cell =
 // one neighbour radius, wrapping around: far-apart particles may share a cell,
-// the distance check sorts them out.
+// the distance check sorts them out. The wrap is 5.9 R⊕ at 131k, and a plain
+// one laid a moon at 4.7 R⊕ over the planet's limb once an orbit: the cells
+// filled past their eight seats, the unseated pushed without being pushed
+// back, and the system took a metre a second of momentum from every pass. So
+// each period's image is skewed in y — by half a period for the period in x,
+// a quarter for the one in z — and lands where nothing is: the planet, the
+// disk and the moon all live near the plane y = 0. (A scrambling hash
+// instead spreads the collisions evenly, and that is worse: two cells of
+// the planet's own interior meeting in a seat overfill it, at a steady
+// quarter of a per cent of the particles.)
 var GLSL_HGRID = [
   'uniform int uGMask;',
   'uniform int uGShift;',
   'uniform int uSXMask;',
   'uniform int uSXShift;',
-  'ivec2 hashAt(ivec3 c) { c &= uGMask; return ivec2(((c.z & uSXMask) << uGShift) + c.x, ((c.z >> uSXShift) << uGShift) + c.y); }'
-].join('\n');
-// the k-th seat of a cell, from the eight slot textures
-var GLSL_SLOTS = [
-  'float slotAt(int k, ivec2 a) {',
-  '  if (k == 0) return texelFetch(uS0, a, 0).r;',
-  '  if (k == 1) return texelFetch(uS1, a, 0).r;',
-  '  if (k == 2) return texelFetch(uS2, a, 0).r;',
-  '  if (k == 3) return texelFetch(uS3, a, 0).r;',
-  '  if (k == 4) return texelFetch(uS4, a, 0).r;',
-  '  if (k == 5) return texelFetch(uS5, a, 0).r;',
-  '  if (k == 6) return texelFetch(uS6, a, 0).r;',
-  '  return texelFetch(uS7, a, 0).r;',
+  'ivec2 hashAt(ivec3 c) {',
+  '  ivec3 p = c >> uGShift;',                                            // which period of the wrap each coordinate is in
+  '  c.y += (p.x << (uGShift - 1)) + (p.z << (uGShift - 2));',
+  '  c.z += p.y << (uGShift - 1);',
+  '  c &= uGMask;',
+  '  return ivec2(((c.z & uSXMask) << uGShift) + c.x, ((c.z >> uSXShift) << uGShift) + c.y);',
   '}'
 ].join('\n');
+// the seats of a cell: eight, in two texels — the even ones in uSA, the odd
+// in uSB — so a cell is two fetches, not eight, and the two do not wait on
+// each other. seat(k) picks the k-th out of the pair; k is a constant once
+// the loop over the seats is unrolled, so the picking costs nothing. A seat
+// is a bit pattern in a float: the particle's index in the low 18 bits, and
+// in the 12 above where the particle sat in the cell when the cells were
+// built, a fifteenth of it an axis — fifteen, not sixteen, and bit 30 set,
+// so the exponent is never all ones nor all zeros and the pattern rides
+// through the pipeline as a normal float, neither a NaN to be canonised nor
+// a denormal to be flushed. −1 is an empty seat: the only pattern with the
+// sign bit set
+var GLSL_SLOTS = [
+  'uniform sampler2D uSA;',
+  'uniform sampler2D uSB;',
+  'uint seat(int k, vec4 sa, vec4 sb) { vec4 s = (k & 1) == 0 ? sa : sb; int h = k >> 1; return floatBitsToUint(h == 0 ? s.x : h == 1 ? s.y : h == 2 ? s.z : s.w); }',
+  'bool noSeat(uint v) { return (v & 0x80000000u) != 0u; }',
+  'int seatIdx(uint v) { return int(v & 0x3FFFFu); }',
+  'vec3 seatPos(uint v) { return (vec3(uvec3(v >> 18, v >> 22, v >> 26) & 15u) + 0.5) / 15.0; }'   // in cells, from the cell's corner
+].join('\n');
 
-// 1. Filling the contact cells, one slot per pass. Every particle draws a
+// 1. Filling the contact cells, one seat per pass. Every particle draws a
 //    one-pixel point at its cell; the depth test keeps the lowest index.
 //    Next pass, particles already seated stay away — a depth-peel that stands
-//    in for an atomic counter.
+//    in for an atomic counter. The seats of a cell come out in rising order,
+//    so whether a particle is seated is one look at the seat before this
+//    one: it is still to be seated if that seat is taken by a lower index.
 var SLOT_VS = [
   '#version 300 es',
   'precision highp float;',
   'precision highp int;',
   'precision highp sampler2D;',
   'uniform sampler2D uPos;',
-  'uniform sampler2D uS0;', 'uniform sampler2D uS1;', 'uniform sampler2D uS2;', 'uniform sampler2D uS3;',
-  'uniform sampler2D uS4;', 'uniform sampler2D uS5;', 'uniform sampler2D uS6;', 'uniform sampler2D uS7;',
+  'uniform sampler2D uPrev;',     // the texture holding seat uK − 1
   'uniform ivec2 uSize;',
   'uniform int uK;',
   'uniform float uInvCell;',
   'uniform vec2 uAtlas;',
   'uniform float uInvN;',
   GLSL_HGRID,
-  'flat out float vIdx;',
+  'flat out float vSeat;',
   'void main() {',
   '  int i = gl_VertexID;',
-  '  vec3 p = texelFetch(uPos, ivec2(i % uSize.x, i / uSize.x), 0).xyz;',
-  '  ivec2 a = hashAt(ivec3(floor(p * uInvCell)));',
-  '  float me = float(i);',
+  '  vec3 g = texelFetch(uPos, ivec2(i % uSize.x, i / uSize.x), 0).xyz * uInvCell;',
+  '  ivec2 a = hashAt(ivec3(floor(g)));',
+  '  uint me = uint(i);',
   '  bool t = false;',
-  '  if (uK > 0) t = t || (texelFetch(uS0, a, 0).r == me);',
-  '  if (uK > 1) t = t || (texelFetch(uS1, a, 0).r == me);',
-  '  if (uK > 2) t = t || (texelFetch(uS2, a, 0).r == me);',
-  '  if (uK > 3) t = t || (texelFetch(uS3, a, 0).r == me);',
-  '  if (uK > 4) t = t || (texelFetch(uS4, a, 0).r == me);',
-  '  if (uK > 5) t = t || (texelFetch(uS5, a, 0).r == me);',
-  '  if (uK > 6) t = t || (texelFetch(uS6, a, 0).r == me);',
-  '  if (uK > 7) t = t || (texelFetch(uS7, a, 0).r == me);',
-  '  vIdx = me;',
+  '  if (uK > 0) {',
+  '    vec4 s = texelFetch(uPrev, a, 0); int h = (uK - 1) >> 1;',
+  '    uint prev = floatBitsToUint(h == 0 ? s.x : h == 1 ? s.y : h == 2 ? s.z : s.w);',
+  '    t = (prev & 0x80000000u) != 0u || me <= (prev & 0x3FFFFu);',   // seated already, or the cell had nobody left last time
+  '  }',
+  '  uvec3 q = uvec3(clamp(fract(g) * 15.0, 0.0, 14.0));',
+  '  vSeat = uintBitsToFloat(me | (q.x << 18) | (q.y << 22) | (q.z << 26) | 0x40000000u);',
   '  gl_PointSize = 1.0;',
   '  if (t) { gl_Position = vec4(4.0, 4.0, 4.0, 1.0); return; }',
-  '  gl_Position = vec4((vec2(a) + 0.5) / uAtlas * 2.0 - 1.0, me * uInvN * 2.0 - 1.0, 1.0);',
+  '  gl_Position = vec4((vec2(a) + 0.5) / uAtlas * 2.0 - 1.0, float(i) * uInvN * 2.0 - 1.0, 1.0);',
   '}'
 ].join('\n');
 var SLOT_FS = [
   '#version 300 es',
   'precision highp float;',
-  'flat in float vIdx;',
+  'flat in float vSeat;',
   'out vec4 o;',
-  'void main() { o = vec4(vIdx, 0.0, 0.0, 1.0); }'
+  'void main() { o = vec4(vSeat); }'   // the seat in every channel: the colour mask picks the one being filled
 ].join('\n');
 
 // 2. Mass onto the mesh: each particle is eight points, one per corner of its
@@ -105,7 +125,11 @@ var DEP_VS = [
   GLSL_GRID,
   'out vec4 vW;',
   'void main() {',
-  '  int i = gl_VertexID >> 3, k = gl_VertexID & 7;',
+  // the particles are taken in a scrambled order — an odd multiple of the
+  // index, modulo the count, which is a power of two — because in their own
+  // order they come sorted by place, and a run of a few hundred points into
+  // the same cell is a run of blends the ROP can only do one after the other
+  '  int i = ((gl_VertexID >> 3) * 40503) & (uSize.x * uSize.y - 1), k = gl_VertexID & 7;',
   '  ivec2 tc = ivec2(i % uSize.x, i / uSize.x);',
   '  vec3 p = texelFetch(uPos, tc, 0).xyz;',
   '  float mr = texelFetch(uMat, tc, 0).r;',
@@ -168,9 +192,56 @@ var MONO_FS = [
   '  o = s;',
   '}'
 ].join('\n');
-// 5. Gravity at every occupied fine cell: the 5³ coarse cells around it are
+// 5. The far field, block by block: for every occupied coarse block, the
+//    pull of every block more than two away, at the block's centre of mass —
+//    as an acceleration, its gradient (the tidal tensor) and the potential.
+//    Block on block is equal and opposite, so what the far field does to
+//    the mesh as a whole is nothing. It was not, when every fine cell summed
+//    the far blocks for itself: a cell saw a block as a point at the block's
+//    centre of mass, the block's cells saw the cell's block the same way,
+//    and the two sums differ at the quadrupole — a self-force of a few
+//    hundredths of a metre a second an hour, which walked the planet a
+//    radius across the mesh in a hundred hours and carried the Moon over
+//    the edge.
+var FAR_FS = [
+  '#version 300 es',
+  'precision highp float;',
+  'precision highp int;',
+  'precision highp sampler2D;',
+  'uniform sampler2D uCoarse;',
+  GLSL_GRID,
+  'layout(location = 0) out vec4 oA;',    // xyz — acceleration per unit mass, w — potential
+  'layout(location = 1) out vec4 oT0;',   // Txx Tyy Tzz Txy
+  'layout(location = 2) out vec4 oT1;',   // Txz Tyz — —
+  'void main() {',
+  '  ivec2 me = ivec2(gl_FragCoord.xy);',
+  '  ivec3 c = ivec3(me.x & 15, me.y & 15, (me.y >> 4) * 4 + (me.x >> 4));',
+  '  vec4 mc = texelFetch(uCoarse, me, 0);',
+  '  oA = vec4(0.0); oT0 = vec4(0.0); oT1 = vec4(0.0);',
+  '  if (mc.w <= 0.0) return;',
+  '  vec3 x = mc.xyz / mc.w;',
+  '  vec3 acc = vec3(0.0), td = vec3(0.0), to = vec3(0.0);',   // the tensor's diagonal, and its xy xz yz
+  '  float pot = 0.0;',
+  '  for (int kz = 0; kz < 16; kz++) for (int ky = 0; ky < 16; ky++) for (int kx = 0; kx < 16; kx++) {',
+  '    ivec3 k = ivec3(kx, ky, kz), dd = abs(k - c);',
+  '    if (max(dd.x, max(dd.y, dd.z)) <= 2) continue;',
+  '    vec4 m = texelFetch(uCoarse, coarseAt(k), 0);',
+  '    if (m.w <= 0.0) continue;',
+  '    vec3 r = m.xyz / m.w - x;',
+  '    float inv2 = 1.0 / dot(r, r), inv = sqrt(inv2), inv3 = inv * inv2, inv5 = inv3 * inv2;',
+  '    acc += r * (m.w * inv3); pot -= m.w * inv;',
+  '    td += m.w * (3.0 * r * r * inv5 - inv3);',
+  '    to += m.w * (3.0 * vec3(r.x * r.y, r.x * r.z, r.y * r.z) * inv5);',
+  '  }',
+  '  oA = vec4(acc, pot); oT0 = vec4(td, to.x); oT1 = vec4(to.y, to.z, 0.0, 0.0);',
+  '}'
+].join('\n');
+// 6. Gravity at every occupied fine cell: the 5³ coarse cells around it are
 //    summed fine cell by fine cell (that block is 3.75 R⊕ wide, so the whole
-//    planet is in it), the rest of the world as coarse centres of mass. The
+//    planet is in it), the rest of the world as the cell's block's far
+//    field, carried from the block's centre of mass to the cell by the
+//    tidal tensor — so a block's cells feel the tide across it, and the
+//    block as a whole feels exactly the block-to-block force. The
 //    potential rides in w, for the energy books.
 var CELL_FS = [
   '#version 300 es',
@@ -179,6 +250,9 @@ var CELL_FS = [
   'precision highp sampler2D;',
   'uniform sampler2D uFine;',
   'uniform sampler2D uCoarse;',
+  'uniform sampler2D uFarA;',
+  'uniform sampler2D uFarT0;',
+  'uniform sampler2D uFarT1;',
   'uniform float uH;',
   'uniform float uL;',
   'uniform float uEps2;',
@@ -196,25 +270,27 @@ var CELL_FS = [
   '  ivec3 cc = c >> 2;',
   '  vec3 acc = vec3(0.0);',
   '  float pot = 0.0;',
-  '  for (int kz = 0; kz < 16; kz++) for (int ky = 0; ky < 16; ky++) for (int kx = 0; kx < 16; kx++) {',
-  '    ivec3 k = ivec3(kx, ky, kz);',
+  '  for (int kz = -2; kz <= 2; kz++) for (int ky = -2; ky <= 2; ky++) for (int kx = -2; kx <= 2; kx++) {',
+  '    ivec3 k = cc + ivec3(kx, ky, kz);',
+  '    if (any(lessThan(k, ivec3(0))) || any(greaterThan(k, ivec3(15)))) continue;',
   '    vec4 m = texelFetch(uCoarse, coarseAt(k), 0);',
-  '    if (m.w <= 0.0) continue;',                       // an empty block, near or far, is nothing: most of the 125 near ones are
-  '    ivec3 dd = abs(k - cc);',
-  '    if (max(dd.x, max(dd.y, dd.z)) <= 2) {',
-  '      for (int fz = 0; fz < 4; fz++) for (int fy = 0; fy < 4; fy++) for (int fx = 0; fx < 4; fx++) {',
-  '        ivec3 f = k * 4 + ivec3(fx, fy, fz);',
-  '        if (f == c) continue;',
-  '        vec4 mf = texelFetch(uFine, fineAt(f), 0);',
-  '        if (mf.w <= 0.0) continue;',
-  '        vec3 r = mf.xyz / mf.w - x;',
-  '        float inv = inversesqrt(dot(r, r) + uEps2);',
-  '        acc += r * (mf.w * inv * inv * inv); pot -= mf.w * inv;',
-  '      }',
-  '    } else {',
-  '      vec3 r = m.xyz / m.w - x; float inv = inversesqrt(dot(r, r)); acc += r * (m.w * inv * inv * inv); pot -= m.w * inv;',
+  '    if (m.w <= 0.0) continue;',                       // an empty block is nothing: most of the 125 are
+  '    for (int fz = 0; fz < 4; fz++) for (int fy = 0; fy < 4; fy++) for (int fx = 0; fx < 4; fx++) {',
+  '      ivec3 f = k * 4 + ivec3(fx, fy, fz);',
+  '      if (f == c) continue;',
+  '      vec4 mf = texelFetch(uFine, fineAt(f), 0);',
+  '      if (mf.w <= 0.0) continue;',
+  '      vec3 r = mf.xyz / mf.w - x;',
+  '      float inv = inversesqrt(dot(r, r) + uEps2);',
+  '      acc += r * (mf.w * inv * inv * inv); pot -= mf.w * inv;',
   '    }',
   '  }',
+  '  ivec2 ca = coarseAt(cc);',
+  '  vec4 mb = texelFetch(uCoarse, ca, 0), fa = texelFetch(uFarA, ca, 0), t0 = texelFetch(uFarT0, ca, 0), t1 = texelFetch(uFarT1, ca, 0);',
+  '  vec3 d = x - mb.xyz / mb.w;',
+  '  vec3 Td = vec3(t0.x * d.x + t0.w * d.y + t1.x * d.z, t0.w * d.x + t0.y * d.y + t1.y * d.z, t1.x * d.x + t1.y * d.y + t0.z * d.z);',
+  '  acc += fa.xyz + Td;',
+  '  pot += fa.w - dot(fa.xyz, d) - 0.5 * dot(d, Td);',
   '  o = vec4(acc * uGm, pot * uGm);',
   '}'
 ].join('\n');
@@ -235,8 +311,6 @@ var SIM_PRE = [
   'uniform sampler2D uPos;',      // xyz — position, w — body (0 target, 1 impactor)
   'uniform sampler2D uVel;',      // xyz — velocity, w — temperature, K
   'uniform sampler2D uMat;',      // r — mass, in Earth-mantle particles
-  'uniform sampler2D uS0;', 'uniform sampler2D uS1;', 'uniform sampler2D uS2;', 'uniform sampler2D uS3;',
-  'uniform sampler2D uS4;', 'uniform sampler2D uS5;', 'uniform sampler2D uS6;', 'uniform sampler2D uS7;',
   'uniform ivec2 uSize;',
   'uniform float uInvCell;',
   'uniform float uCell;',
@@ -244,6 +318,7 @@ var SIM_PRE = [
   'uniform float uGDt;',          // the mesh gravity's time step: the steps it stands for, as one impulse — or 0
   'uniform float uTouch;',        // contact distance, 2a
   'uniform float uLink2;',        // neighbour radius²
+  'uniform float uReach2;',       // (neighbour radius + what a seat's place can be off by)²: the cut for skipping a seat unfetched
   'uniform float uK;',            // contact spring
   'uniform float uC;',            // contact dashpot
   'uniform float uInvM;',
@@ -286,11 +361,14 @@ var SIM_PRE = [
   '    vec3 q = clamp(p, lo, lo + uCell) - p;',       // nearest point of that cell: too far, skip it
   '    if (dot(q, q) > uLink2) continue;',
   '    ivec2 a = hashAt(c + ivec3(dx, dy, dz));',
+  '    vec4 sa = texelFetch(uSA, a, 0), sb = texelFetch(uSB, a, 0);',
   '    for (int k = 0; k < 8; k++) {',
-  '      float fj = slotAt(k, a);',
-  '      if (fj < 0.0) break;',
-  '      int j = int(fj);',
+  '      uint sv = seat(k, sa, sb);',
+  '      if (noSeat(sv)) break;',
+  '      int j = seatIdx(sv);',
   '      if (j == myIdx) continue;',
+  '      vec3 dq = lo + seatPos(sv) * uCell - p;',     // where it sat, to a fifteenth of a cell and a step of motion: most of the cells' seats are beyond reach, and are let go without a fetch
+  '      if (dot(dq, dq) > uReach2) continue;',
   '      ivec2 tj = ivec2(j % uSize.x, j / uSize.x);',
   '      vec4 Pj = texelFetch(uPos, tj, 0);',
   '      vec3 d = Pj.xyz - p;',
@@ -348,7 +426,7 @@ var SIM_GRAV_MESH = [
   '    grav = r * (uGm * mono.w * inv * inv * inv);',
   '  }',
   '  float seat = texelFetch(uPPSlot, me, 0).r;',
-  '  if (seat >= 0.0) grav += texelFetch(uPPForce, ivec2(int(seat) & 127, int(seat) >> 7), 0).xyz;',
+  '  if (seat >= 0.0) { ivec2 sc = ivec2(int(seat) & 127, int(seat) >> 7); for (int s = 0; s < 4; s++) grav += texelFetch(uPPForce, sc + ivec2(0, 64 * s), 0).xyz; }',
 ];
 var SIM_GRAV_FIELD = [
   '  vec3 grav = uGField;'
@@ -477,8 +555,6 @@ var DIAG_FS = [
   'uniform sampler2D uQ;',
   'uniform sampler2D uForce;',
   'uniform sampler2D uMono;',
-  'uniform sampler2D uS0;', 'uniform sampler2D uS1;', 'uniform sampler2D uS2;', 'uniform sampler2D uS3;',
-  'uniform sampler2D uS4;', 'uniform sampler2D uS5;', 'uniform sampler2D uS6;', 'uniform sampler2D uS7;',
   'uniform ivec2 uSize;',
   'uniform float uInvCell;',
   'uniform float uInvH;',
@@ -497,11 +573,12 @@ var DIAG_FS = [
   '  vec3 p = texelFetch(uPos, me, 0).xyz;',
   '  ivec2 a = hashAt(ivec3(floor(p * uInvCell)));',
   '  float seated = 0.0, taken = 0.0;',
+  '  vec4 sa = texelFetch(uSA, a, 0), sb = texelFetch(uSB, a, 0);',
   '  for (int k = 0; k < 8; k++) {',
-  '    float fj = slotAt(k, a);',
-  '    if (fj < 0.0) break;',
+  '    uint sv = seat(k, sa, sb);',
+  '    if (noSeat(sv)) break;',
   '    taken += 1.0;',
-  '    if (int(fj) == myIdx) seated = 1.0;',
+  '    if (seatIdx(sv) == myIdx) seated = 1.0;',
   '  }',
   '  float phi = 0.0, off = 0.0;',
   '  vec3 g = (p + uL) * uInvH - 0.5;',
@@ -520,7 +597,7 @@ var DIAG_FS = [
   '    off = 2.0;',
   '  }',
   '  float seat = texelFetch(uPPSlot, me, 0).r;',
-  '  if (seat >= 0.0) phi += texelFetch(uPPForce, ivec2(int(seat) & 127, int(seat) >> 7), 0).w;',
+  '  if (seat >= 0.0) { ivec2 sc = ivec2(int(seat) & 127, int(seat) >> 7); for (int s = 0; s < 4; s++) phi += texelFetch(uPPForce, sc + ivec2(0, 64 * s), 0).w; }',
   '  o = vec4(phi, seated + off, taken, texelFetch(uQ, me, 0).r);',
   '}'
 ].join('\n');
@@ -541,20 +618,31 @@ var PPGATHER_FS = [
   'uniform sampler2D uMat;',
   'uniform sampler2D uIndex;',      // r — the particle in this seat, or -1
   'uniform ivec2 uSize;',
-  'out vec4 o;',                    // xyz — position, w — mass, or -1 for an empty seat
+  'uniform float uInvH;',
+  'uniform float uL;',
+  'out vec4 o;',                    // xyz — position, w — mass, negative for a particle off the mesh, 0 for an empty seat
   'void main() {',
   '  ivec2 me = ivec2(gl_FragCoord.xy);',
   '  float fi = texelFetch(uIndex, me, 0).r;',
-  '  if (fi < 0.0) { o = vec4(0.0, 0.0, 0.0, -1.0); return; }',
+  '  if (fi < 0.0) { o = vec4(0.0); return; }',
   '  int i = int(fi);',
   '  ivec2 t = ivec2(i % uSize.x, i / uSize.x);',
-  '  o = vec4(texelFetch(uPos, t, 0).xyz, texelFetch(uMat, t, 0).r);',
+  '  vec3 p = texelFetch(uPos, t, 0).xyz, g = (p + uL) * uInvH - 0.5;',
+  '  bool on = all(greaterThanEqual(g, vec3(0.0))) && all(lessThanEqual(g, vec3(63.0)));',
+  '  o = vec4(p, texelFetch(uMat, t, 0).r * (on ? 1.0 : -1.0));',
   '}'
 ].join('\n');
-// …then every seat is summed against the whole list. The mesh's own pair
-// force and potential come as tables by distance (see meshPairTable), Newton's
-// is softened at the particle radius, and the difference is tapered out at
-// the cut-off.
+// …then every seat is summed against the whole list — in four slices, a
+// quarter of the list each, that the readers add up: eight thousand seats
+// are too few threads to keep a GPU busy, and four times that is not. The
+// mesh's own pair force and potential come as tables by distance (see
+// meshPairTable) — in a texture, not a uniform array: an index that differs
+// from thread to thread into a uniform array is served one thread at a time,
+// and that was most of the pass — Newton's is softened at the particle
+// radius, and the difference is tapered out at the cut-off. A pair with a
+// side off the mesh got nothing from the mesh, and is given the whole of
+// Newton: a moonlet straddling the edge stays bound — subtracting the
+// table there took half its self-gravity, and the tide had the rest.
 var PPFORCE_FS = [
   '#version 300 es',
   'precision highp float;',
@@ -565,17 +653,18 @@ var PPFORCE_FS = [
   'uniform float uGm;',
   'uniform float uCut;',
   'uniform float uA2;',             // particle radius²
-  'uniform float uTab[64];',        // the mesh's pair force × r², by r/uCut
-  'uniform float uPot[64];',        // its pair potential × r
-  'out vec4 o;',                    // xyz — acceleration to add, w — potential to add
+  'uniform sampler2D uTab;',        // 64 × 1: r — the mesh's pair force × r², by r/uCut; g — its pair potential × r
+  'out vec4 o;',                    // xyz — acceleration to add, w — potential to add, this slice's share
   'void main() {',
   '  ivec2 me = ivec2(gl_FragCoord.xy);',
+  '  int slice = me.y >> 6; me.y &= 63;',
   '  int myIdx = me.y * 128 + me.x;',
+  '  int share = (uCount + 3) >> 2, j0 = slice * share, j1 = min(j0 + share, uCount);',
   '  vec4 P = texelFetch(uList, me, 0);',
-  '  if (myIdx >= uCount || P.w < 0.0) { o = vec4(0.0); return; }',
+  '  if (myIdx >= uCount || P.w == 0.0) { o = vec4(0.0); return; }',
   '  vec3 acc = vec3(0.0);',
   '  float pot = 0.0, cut2 = uCut * uCut, a = sqrt(uA2);',
-  '  for (int j = 0; j < uCount; j++) {',
+  '  for (int j = j0; j < j1; j++) {',
   '    if (j == myIdx) continue;',
   '    vec4 Q = texelFetch(uList, ivec2(j & 127, j >> 7), 0);',
   '    vec3 d = Q.xyz - P.xyz;',
@@ -587,9 +676,10 @@ var PPFORCE_FS = [
   '    float t = x - float(k);',
   '    float invN = inversesqrt(r2 + uA2);',
   '    float taper = smoothstep(uCut, 0.8 * uCut, r);',
-  '    float fn = invN * invN * invN * r - mix(uTab[k], uTab[k1], t) / max(r2, uA2);',
-  '    acc += d / max(r, 1e-6) * (Q.w * fn * taper);',
-  '    pot += Q.w * (-invN - mix(uPot[k], uPot[k1], t) / max(r, a)) * taper;',
+  '    vec2 T = mix(texelFetch(uTab, ivec2(k, 0), 0).rg, texelFetch(uTab, ivec2(k1, 0), 0).rg, t) * ((P.w > 0.0 && Q.w > 0.0) ? 1.0 : 0.0);',   // the mesh's share, if the mesh gave this pair one
+  '    float fn = invN * invN * invN * r - T.x / max(r2, uA2), mj = abs(Q.w);',
+  '    acc += d / max(r, 1e-6) * (mj * fn * taper);',
+  '    pot += mj * (-invN - T.y / max(r, a)) * taper;',
   '  }',
   '  o = vec4(acc * uGm, pot * uGm);',
   '}'
@@ -598,7 +688,7 @@ var PPFORCE_FS = [
 
 G.GLSL_GRID = GLSL_GRID; G.GLSL_HGRID = GLSL_HGRID; G.GLSL_SLOTS = GLSL_SLOTS;
 G.SLOT_VS = SLOT_VS; G.SLOT_FS = SLOT_FS; G.DEP_VS = DEP_VS; G.DEP_FS = DEP_FS;
-G.COARSE_FS = COARSE_FS; G.MONO_FS = MONO_FS; G.CELL_FS = CELL_FS; G.simFS = simFS;
+G.COARSE_FS = COARSE_FS; G.MONO_FS = MONO_FS; G.FAR_FS = FAR_FS; G.CELL_FS = CELL_FS; G.simFS = simFS;
 G.RIGID_FS = RIGID_FS; G.PERM_FS = PERM_FS; G.DIAG_FS = DIAG_FS;
 G.PPGATHER_FS = PPGATHER_FS; G.PPFORCE_FS = PPFORCE_FS;
 
