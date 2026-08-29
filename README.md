@@ -2,6 +2,14 @@
 
 **[Live demo → gaploid.github.io/cosmic-collisions](https://gaploid.github.io/cosmic-collisions/)**
 
+*The Moon forming — the canonical Theia impact:*
+
+https://github.com/user-attachments/assets/56ecc852-79bb-46e8-987a-36d0ba89dc8e
+
+*Shatter — half an Earth at 2.6 escape speeds:*
+
+https://github.com/user-attachments/assets/5298d38b-920a-47ee-8cc2-dfe8c6677141
+
 Impacts, simulated. Two planets of real mass fall together under their own
 gravity and collide — the splash, the tidal arm, the debris disk, and the moon
 that gathers out of it. Or a fourteen-kilometre asteroid comes down on the
