@@ -276,14 +276,24 @@ function render() {
   // glow of its surface temperature, brighter than the sun on anything near
   var nl = 0, lp = [0, 0, 0, 0, 0, 0], lc = [0, 0, 0, 0, 0, 0], lr = [1, 1], no = 0, occ = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
   var nb = 0, ball = [0, 0, 0, 1, 0, 0, 0, 1], lball = [-1, -1];
-  // the atmosphere on each ball: what it scatters, what it glows with, how
-  // thick it is. A cold body's is thin and blue — this is the blue planet —
-  // a warm one's thicker and the colour of its glow, a hot one's the rock
-  // vapour it is boiling off, glowing of itself and puffed out
-  var atmCol = [0, 0, 0, 0, 0, 0], atmEm = [0, 0, 0, 0, 0, 0], atmH = [0, 0], atmHot = [0, 0, 0, 0, 0, 0, 0, 0], aball = [0, 0, 0, 1, 0, 0, 0, 1];
+  // the atmosphere on each ball: what it scatters, how thick it is, and
+  // the hole the impact blew in it — the steam a young planet wears, less
+  // what a giant impact throws off
+  var atmCol = [0, 0, 0, 0, 0, 0], atmH = [0, 0], atmHot = [0, 0, 0, 0, 0, 0, 0, 0], atmHole = [0, 0], aball = [0, 0, 0, 1, 0, 0, 0, 1], anyAir = false;
   var occlude = function (c, r) { occ[no * 4] = c[0]; occ[no * 4 + 1] = c[1]; occ[no * 4 + 2] = c[2]; occ[no * 4 + 3] = r; no++; };
   if (sim && report && report.com && sim.phase !== 'settle') {
     var lag = sim.t - (report.t || sim.t), hot = sim.phase === 'full';
+    // a giant impact is one by a body of planetary mass — half a percent of
+    // the target's and up; the Chicxulub globe's rocks are ten-thousandths
+    var giant = hot && sim.M1 > 0 && sim.M2 >= 0.005 * sim.M1;
+    // and how much of the air it takes: the ground under the shock throws
+    // the air over it off wherever it moves near the escape speed, and
+    // how far round the planet that reaches goes with the impactor's
+    // momentum against the planet's, x = (v/v_esc)(m/M) — Schlichting,
+    // Sari & Yalinewich's fit to the ground motion, 0.4x + 1.4x² − 0.8x³,
+    // the whole of it past x = 1. The canonical Theia keeps nine-tenths,
+    // a hit & run two-thirds, twins and the shatter nothing
+    var xg = giant ? Math.min(sim.vc / sim.vesc * sim.M2 / sim.M1, 1) : 0, lost = xg * (0.4 + xg * (1.4 - 0.8 * xg));
     var bodies = [{ com: report.com, core: report.core, vel: report.vel || [0, 0, 0], R: report.R, Redge: report.Redge, mass: report.largest || 0, imp: report.largestImp || 0, Tsurf: report.Tsurf || 0, hotCom: report.hotCom, hotR: report.hotR }];
     if (report.second && report.second.com) bodies.push({ com: report.second.com, core: report.second.core, vel: report.second.vel, R: report.second.R, Redge: report.second.Redge, mass: report.second.mass, imp: report.second.imp || 0, Tsurf: report.second.Tsurf || 0, hotCom: report.second.hotCom, hotR: report.second.hotR, dist: report.second.dist || 0 });
     // the radius a body's skin is drawn at: where the analysis found its
@@ -318,7 +328,7 @@ function render() {
       // clump in the arm is neither round nor airy, and a shell round it was
       // a ring on a lump
       var planet = bi === 0 || (bd.mass >= 0.06 && bd.dist > bodies[0].R + 2.5 * bd.R);
-      var fresh = function (k) { return { off: [0, 0, 0], prev: pc, rep: report, R: Rd, Ts: bd.Tsurf, hot: hoff.slice(), hotR: bd.hotR || 0, k: k }; };
+      var fresh = function (k) { return { off: [0, 0, 0], prev: pc, rep: report, R: Rd, Ts: bd.Tsurf, hot: hoff.slice(), hotR: bd.hotR || 0, k: k, hit: giant && bd.Tsurf >= 3000 ? sim.t - 1 : null }; };
       var bs = bodySmooth[bi];
       if (!bs || lightGen !== sim.gen) bs = bodySmooth[bi] = fresh(planet ? 1 : 0);
       else if (bs.rep !== report) {
@@ -329,6 +339,16 @@ function render() {
       for (var q5 = 0; q5 < 3; q5++) { bs.off[q5] *= 0.93; bs.hot[q5] += (hoff[q5] - bs.hot[q5]) * 0.08; }
       bs.R += (Rd - bs.R) * 0.1; bs.Ts += (bd.Tsurf - bs.Ts) * 0.08; bs.hotR += ((bd.hotR || 0) - bs.hotR) * 0.08;
       bs.k += ((planet ? 1 : 0) - bs.k) * 0.08;
+      // the air: a body in a giant impact whose outer fifth stands at
+      // thousands of kelvin loses its share of it over the eight minutes
+      // after — the shock takes that long to come round — and all of it over
+      // the hot ground, where the shock threw it first; and does not get it
+      // back, the magma ocean's degassing being thousands of years off. A
+      // Chicxulub leaves it be: its one hot grain puts the report's
+      // hot-weighted Tsurf past the mark too, so the mark is the impactor's
+      // mass, not the heat alone
+      if (bs.hit === null && giant && bd.Tsurf >= 3000) bs.hit = sim.t;
+      var strip = bs.hit === null ? 0 : Math.min(Math.max((sim.t - bs.hit) / 0.6, 0), 1), air = 1 - lost * strip;
       var cw = [pc[0] + bs.off[0], pc[1] + bs.off[1], pc[2] + bs.off[2]];
       var e = toEye(cw[0], cw[1], cw[2]);
       occlude(e, bd.R);                                  // every body shadows the other's light
@@ -344,19 +364,16 @@ function render() {
         // its gravity being lower — the column goes as the cube root of the
         // mass, the height as its reciprocal — so a Mars wears half the haze
         // twice as high, which is what a Mars does
-        var Ts = hot ? bs.Ts : 0, heat = Math.min(Math.max((Ts - 700) / 2000, 0), 1);
-        var mk = Math.cbrt(Math.max(bd.mass, 0.02)), ck = 0.24 * Math.min(1, mk);
-        var gc = glowCol(Math.max(Ts, 900));
-        for (var q3 = 0; q3 < 3; q3++) {
-          atmCol[nb * 3 + q3] = LOOK.atm * LOOK.atmCol[q3] * ck * bs.k;
-          atmEm[nb * 3 + q3] = LOOK.atm * LOOK.atmHot * heat * gc[q3] * 0.45 * bs.k;
-        }
+        var mk = Math.cbrt(Math.max(bd.mass, 0.02)), ck = 0.24 * Math.min(1, mk) * bs.k * air;
+        for (var q3 = 0; q3 < 3; q3++) atmCol[nb * 3 + q3] = LOOK.atm * LOOK.atmCol[q3] * ck;
         atmH[nb] = LOOK.atmH * Math.min(2, 1 / mk);
-        // the vapour is where the heat is: the hot centroid, and its spread
-        // taken out to the edge of the hot grains — a uniform ball's rms is
-        // 0.775 of its radius
+        // the hole: over the heat — the hot centroid, its spread taken out
+        // to the edge of the hot grains, a uniform ball's rms being 0.775
+        // of its radius — as deep as the strip has gone
         var eh = toEye(cw[0] + bs.hot[0], cw[1] + bs.hot[1], cw[2] + bs.hot[2]);
         atmHot[nb * 4] = eh[0]; atmHot[nb * 4 + 1] = eh[1]; atmHot[nb * 4 + 2] = eh[2]; atmHot[nb * 4 + 3] = 1.3 * bs.hotR;
+        atmHole[nb] = strip;
+        if (ck > 1e-3) anyAir = true;
         myBall = nb++;
       }
       if (!hot || bd.Tsurf < 900) return;
@@ -408,7 +425,7 @@ function render() {
     gl.uniform1f(s.uGlow, S.glow);
     gl.uniform1f(s.uGlowT, LOOK.glowT); gl.uniform1f(s.uWhite, LOOK.white);
     gl.uniform1i(s.uNO, no); gl.uniform4fv(s['uOcc[0]'], occ);
-    lastLights = { nl: nl, lp: lp.slice(), lc: lc.slice(), lr: lr.slice(), eye: eye.slice(), view: Array.from(view), loc: [s['uLPos[0]'], s['uLCol[0]'], s['uLR2[0]'], s.uNL] };
+    lastLights = { nl: nl, lp: lp.slice(), lc: lc.slice(), lr: lr.slice(), no: no, occ: occ.slice(0, no * 4), ball: ball.slice(), eye: eye.slice(), view: Array.from(view), loc: [s['uLPos[0]'], s['uLCol[0]'], s['uLR2[0]'], s.uNL] };
     gl.uniform1i(s.uNL, nl);
     gl.uniform3fv(s['uLPos[0]'], lp); gl.uniform3fv(s['uLCol[0]'], lc); gl.uniform1fv(s['uLR2[0]'], lr); gl.uniform1iv(s['uLBall[0]'], lball);
     gl.uniform1f(s.uReach2, LOOK.reach * LOOK.reach);
@@ -488,7 +505,7 @@ function render() {
   // the atmosphere, over everything: the shell's light in front of the skin
   mark('atm');
   gl.disable(gl.DEPTH_TEST);
-  if (sim && full && nb > 0 && LOOK.atm > 0 && S.atm !== false) {
+  if (sim && full && anyAir && LOOK.atm > 0 && S.atm !== false) {
     var at = atmProg.u;
     gl.useProgram(atmProg.p);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, blurB.dep);
@@ -497,7 +514,7 @@ function render() {
     gl.uniform2f(at.uRes, w, h);
     gl.uniform3fv(at.uSunEye, sunEye);
     gl.uniform1i(at.uNB, nb); gl.uniform4fv(at['uBall[0]'], aball);
-    gl.uniform3fv(at['uAtmCol[0]'], atmCol); gl.uniform3fv(at['uAtmEm[0]'], atmEm); gl.uniform1fv(at['uAtmH[0]'], atmH); gl.uniform4fv(at['uAtmHot[0]'], atmHot);
+    gl.uniform3fv(at['uAtmCol[0]'], atmCol); gl.uniform1fv(at['uAtmH[0]'], atmH); gl.uniform4fv(at['uAtmHot[0]'], atmHot); gl.uniform1fv(at['uAtmHole[0]'], atmHole);
     gl.uniform1f(at.uRad, sim.a);
     gl.uniform1f(at.uEdge, LOOK.edge); gl.uniform1f(at.uEdgeSoft, LOOK.edgeSoft);
     gl.uniform1f(at.uK, 1.0);

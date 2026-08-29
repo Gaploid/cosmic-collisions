@@ -70,7 +70,7 @@ var LOOK = { glowT: 12000, white: 40000, bloomThr: 1.0, bloomK: 0.3, magma: 20, 
              // in pixels at the corner; the grain; the split tone; the
              // camera's drift in radians a second until it is touched; and
              // the faint stars behind the catalogue's
-             atm: 1.5, atmH: 0.09, atmCol: [0.90, 0.92, 0.98], atmHot: 1.0, spark: 1.0, sparkSize: 2.0, sparkTrail: 8, shadows: 1,
+             atm: 1.5, atmH: 0.09, atmCol: [0.90, 0.92, 0.98], spark: 1.0, sparkSize: 2.0, sparkTrail: 8, shadows: 1,
              conv: 1.0, rays: 0.7, streak: 0.4, streakThr: 4.0, ghosts: 0.1, haze: 1.0, ca: 1.5, grain: 0.035, grade: 1.0,
              idleSpin: 0.03, faint: 1 };
 // magma: the hot bodies' light on what is next to them, in their own

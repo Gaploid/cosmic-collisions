@@ -619,68 +619,80 @@ function fof(N, mref, a, P, V, R, D, spring, touch, cap, sort) {
     if (g1 < 0 || size[i] > size[g1]) { g2 = g1; g1 = i; }
     else if (g2 < 0 || size[i] > size[g2]) g2 = i;
   }
+  var members = new Int32Array(N);
   function stats(root) {
-    var n = 0, mass = 0, x = 0, y = 0, z = 0, vx = 0, vy = 0, vz = 0, imp = 0, iron = 0, ix = 0, iy = 0, iz = 0;
-    for (var t = 0; t < N; t++) if (find(t) === root) {
-      var m = mref * R[t], w = P[t * 4 + 3];
-      n++; mass += m;
+    // one pass for the sums: the mass, its centre and velocity, the
+    // impactor's and the iron's share, the impactor's own centre — which,
+    // with the totals, gives the target's — and the group's members, for
+    // the passes after
+    var n = 0, mass = 0, x = 0, y = 0, z = 0, vx = 0, vy = 0, vz = 0, imp = 0, iron = 0, ix = 0, iy = 0, iz = 0, t, s, m, w;
+    for (t = 0; t < N; t++) if (find(t) === root) {
+      m = mref * R[t]; w = P[t * 4 + 3];
+      members[n++] = t; mass += m;
       x += m * P[t * 4]; y += m * P[t * 4 + 1]; z += m * P[t * 4 + 2];
       vx += m * V[t * 4]; vy += m * V[t * 4 + 1]; vz += m * V[t * 4 + 2];
       if (w >= 3.5) { imp += m; ix += m * P[t * 4]; iy += m * P[t * 4 + 1]; iz += m * P[t * 4 + 2]; }
       if (w - 4 * Math.floor(w / 4) < 0.5) iron += m;
     }
-    // the surface temperature the body shines with, and lights the others
-    // by: over the outer fifth of the radius, weighted by T² — the light is
-    // the hot patches', not the average's — with the vapour's tens of
-    // thousands of kelvin capped where the glow saturates anyway
-    // and the impactor's material in the group: where it is and how spread
-    // — a ball still, in the first hour, that shadows the planet's light
-    var gx = x / mass, gy = y / mass, gz = z / mass, Rg = Math.cbrt(mass), shell = 0.64 * Rg * Rg, Ts = 0, ws = 0;
-    var icx = imp > 0 ? ix / imp : 0, icy = imp > 0 ? iy / imp : 0, icz = imp > 0 ? iz / imp : 0, irms = 0;
-    // and where the body ends, for the picture: its mass in shells out to
-    // three radii, the density of each, and the first shell past the
-    // mantle's own where it falls under a third of the mantle's. The
-    // mass-radius says where a cold ball of this would end; a body hot
-    // from the impact stands well above it, and a skin cut at the
-    // mass-radius peeled it
-    // and where the heat is, for the picture's light: the glow-weighted
-    // centroid of the hot grains and their spread. A body's light sits
-    // there and not at its centre of mass — while two bodies are one
-    // group in contact the centre of mass is between them, and a ball of
-    // the mass-radius round it cut across the impactor; the glow is the
-    // contact's, and the light should come from it
-    var NBIN = 96, dr = 3 * Rg / NBIN, hist = new Float64Array(NBIN), hs = 0, hx = 0, hy = 0, hz = 0, hr2 = 0;
-    for (t = 0; t < N; t++) if (find(t) === root) {
-      var sx = P[t * 4] - gx, sy = P[t * 4 + 1] - gy, sz = P[t * 4 + 2] - gz, r2s = sx * sx + sy * sy + sz * sz;
-      var Th = V[t * 4 + 3];
-      if (r2s > shell) { var Tt = Math.min(Th, 12000), wt = Tt * Tt; Ts += wt * Tt; ws += wt; }
-      if (Th > 1200) { var wh = Math.min(Th, 12000); wh *= wh; hs += wh; hx += wh * P[t * 4]; hy += wh * P[t * 4 + 1]; hz += wh * P[t * 4 + 2]; hr2 += wh * (sx * sx + sy * sy + sz * sz); }
-      if (P[t * 4 + 3] >= 3.5) { var ex = P[t * 4] - icx, ey = P[t * 4 + 1] - icy, ez = P[t * 4 + 2] - icz; irms += mref * R[t] * (ex * ex + ey * ey + ez * ez); }
-      var bi = Math.sqrt(r2s) / dr; hist[bi < NBIN - 1 ? bi | 0 : NBIN - 1] += mref * R[t];
-    }
-    var hotCom = hs > 0 ? [hx / hs, hy / hs, hz / hs] : [gx, gy, gz], hotR = Rg;
-    if (hs > 0) { var ox = hotCom[0] - gx, oy = hotCom[1] - gy, oz = hotCom[2] - gz; hotR = Math.sqrt(Math.max(hr2 / hs - (ox * ox + oy * oy + oz * oz), 0)); }   // the spread about the hot centroid, from the spread about the centre of mass
-    // and the body's own centre, for the picture: the centre of mass of the
-    // group moves whenever the arm's clump is counted in or out of it, by
-    // a sixth of a radius at a time, and a ball, a light or a shell keyed
-    // to it lurched with every report. The core is the centroid of what
-    // lies within the radius, found twice over: the arm and the loose
-    // grains do not pull it
-    var core = [gx, gy, gz], rc2 = 1.15 * 1.15 * Rg * Rg;
-    for (var it = 0; it < 2; it++) {
-      var sm = 0, sx0 = 0, sy0 = 0, sz0 = 0;
-      for (t = 0; t < N; t++) if (find(t) === root) {
-        var qx = P[t * 4] - core[0], qy = P[t * 4 + 1] - core[1], qz = P[t * 4 + 2] - core[2];
-        if (qx * qx + qy * qy + qz * qz < rc2) { var mq = mref * R[t]; sm += mq; sx0 += mq * P[t * 4]; sy0 += mq * P[t * 4 + 1]; sz0 += mq * P[t * 4 + 2]; }
+    var gx = x / mass, gy = y / mass, gz = z / mass, Rg = Math.cbrt(mass);
+    var icx = imp > 0 ? ix / imp : 0, icy = imp > 0 ? iy / imp : 0, icz = imp > 0 ? iz / imp : 0;
+    // the body's own centre, for the picture. The centre of mass is not
+    // it: while two bodies are one group in contact it sits between them,
+    // and with an arm or a curtain of ejecta attached it stands well off
+    // the body and lurches as clumps are counted in and out. So the centre
+    // is sought from the centre of the material the group is mostly made
+    // of — the target's, or the impactor's for a surviving impactor —
+    // which is the right lobe even in contact, and walked from there to
+    // the centroid of what lies within nine-tenths of the radius, three
+    // times over: the arm, the curtain and the other body's near cap do
+    // not pull it, and a merged body's iron draws it to the middle
+    var tm = mass - imp, core = imp > tm ? [icx, icy, icz] : [(x - ix) / tm, (y - iy) / tm, (z - iz) / tm];
+    var rc2 = 0.9 * 0.9 * Rg * Rg, it, sm, sx0, sy0, sz0, qx, qy, qz;
+    for (it = 0; it < 3; it++) {
+      sm = 0; sx0 = 0; sy0 = 0; sz0 = 0;
+      for (s = 0; s < n; s++) {
+        t = members[s]; qx = P[t * 4] - core[0]; qy = P[t * 4 + 1] - core[1]; qz = P[t * 4 + 2] - core[2];
+        if (qx * qx + qy * qy + qz * qz < rc2) { m = mref * R[t]; sm += m; sx0 += m * P[t * 4]; sy0 += m * P[t * 4 + 1]; sz0 += m * P[t * 4 + 2]; }
       }
       if (sm > 0) core = [sx0 / sm, sy0 / sm, sz0 / sm];
     }
+    // about that centre, all at once: the surface temperature the body
+    // shines with, and lights the others by — over the outer fifth of the
+    // radius, weighted by T², the light being the hot patches' and not the
+    // average's, with the vapour's tens of thousands of kelvin capped
+    // where the glow saturates anyway; where the heat is, for the
+    // picture's light — the glow-weighted centroid of the hot grains and
+    // their spread, since in contact the glow is the contact's and the
+    // light should come from it; how spread the impactor's material is —
+    // a ball still, in the first hour, that shadows the planet's light;
+    // and the mass in shells out to three radii, for where the body ends
+    var shell = 0.64 * Rg * Rg, Ts = 0, ws = 0, irms = 0;
+    var NBIN = 96, dr = 3 * Rg / NBIN, hist = new Float64Array(NBIN), hs = 0, hx = 0, hy = 0, hz = 0, hr2 = 0;
+    for (s = 0; s < n; s++) {
+      t = members[s]; m = mref * R[t];
+      var sx = P[t * 4] - core[0], sy = P[t * 4 + 1] - core[1], sz = P[t * 4 + 2] - core[2], r2s = sx * sx + sy * sy + sz * sz;
+      var Th = V[t * 4 + 3];
+      if (r2s > shell) { var Tt = Math.min(Th, 12000), wt = Tt * Tt; Ts += wt * Tt; ws += wt; }
+      if (Th > 1200) { var wh = Math.min(Th, 12000); wh *= wh; hs += wh; hx += wh * P[t * 4]; hy += wh * P[t * 4 + 1]; hz += wh * P[t * 4 + 2]; hr2 += wh * r2s; }
+      if (P[t * 4 + 3] >= 3.5) { var ex = P[t * 4] - icx, ey = P[t * 4 + 1] - icy, ez = P[t * 4 + 2] - icz; irms += m * (ex * ex + ey * ey + ez * ez); }
+      var bi = Math.sqrt(r2s) / dr; hist[bi < NBIN - 1 ? bi | 0 : NBIN - 1] += m;
+    }
+    var hotCom = hs > 0 ? [hx / hs, hy / hs, hz / hs] : core.slice(), hotR = Rg;
+    if (hs > 0) { var ox = hotCom[0] - core[0], oy = hotCom[1] - core[1], oz = hotCom[2] - core[2]; hotR = Math.sqrt(Math.max(hr2 / hs - (ox * ox + oy * oy + oz * oz), 0)); }   // the spread about the hot centroid, from the spread about the centre
+    // and where the body ends, for the picture: the density of each shell,
+    // and the first past the mantle's own where it falls under a third of
+    // the mantle's. The mass-radius says where a cold ball of this would
+    // end; a body hot from the impact stands well above it, and a skin cut
+    // at the mass-radius peeled it. The mantle's own shells, and where the
+    // search starts, go by the radius of the body's own material: in
+    // contact the group's radius is the two bodies' together, and a search
+    // begun at 0.85 of that began past the body's edge
     var Redge = 0;
     if (n >= 2000) {
-      var rho = new Float64Array(NBIN), refS = 0, refN = 0, bq, rm;
-      for (bq = 0; bq < NBIN; bq++) { rm = (bq + 0.5) * dr; rho[bq] = hist[bq] / (rm * rm * dr); if (rm > 0.6 * Rg && rm < 0.85 * Rg) { refS += rho[bq]; refN++; } }
+      var Rb = Math.cbrt(Math.max(imp, tm)), rho = new Float64Array(NBIN), refS = 0, refN = 0, bq, rm;
+      for (bq = 0; bq < NBIN; bq++) { rm = (bq + 0.5) * dr; rho[bq] = hist[bq] / (rm * rm * dr); if (rm > 0.6 * Rb && rm < 0.85 * Rb) { refS += rho[bq]; refN++; } }
       Redge = Rg;
-      for (bq = 0; bq < NBIN; bq++) if ((bq + 0.5) * dr > 0.85 * Rg && refN > 0 && rho[bq] < 0.35 * refS / refN) { Redge = bq * dr; break; }
+      for (bq = 0; bq < NBIN; bq++) if ((bq + 0.5) * dr > 0.85 * Rb && refN > 0 && rho[bq] < 0.35 * refS / refN) { Redge = bq * dr; break; }
     }
     return { n: n, mass: mass, com: [gx, gy, gz], core: core, vel: [vx / mass, vy / mass, vz / mass], imp: imp / mass, iron: iron / mass, R: Rg, Redge: Redge, Tsurf: ws > 0 ? Ts / ws : 0,
              hotCom: hotCom, hotR: hotR, impMass: imp, impCom: [icx, icy, icz], impRms: imp > 0 ? Math.sqrt(irms / imp) : 0 };

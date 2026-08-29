@@ -79,8 +79,8 @@ takes the beads off the limb — with a surface drawn in each grain's own
 coordinates so it rides the material, and hot rock glowing by its temperature
 and lighting everything else. Over that, the cinema: an atmosphere on each
 body, integrated along the ray through a shell keyed to the skin's own
-silhouette — the steam a magma ocean boils off while the rock is cold, rock
-vapour where the heat is; the loose hot grains drawn once more as comets, streaked by their own
+silhouette — the steam a young planet wears, until the giant impact blows it
+off; the loose hot grains drawn once more as comets, streaked by their own
 motion; the bodies' sun shadows on the disk and on each other; convection
 cells on the melt; and a lens — the sun's glare walked past the bodies into
 shafts, an anamorphic streak and ghosts off the brightest, a heat shimmer,
@@ -103,6 +103,17 @@ credit.
 
 Broad strokes, newest first; the commit history tells each one in full.
 
+- **2026-08-29 — The air goes.** The shell on a hit body was a neon ring:
+  rock vapour puffed round a ball the analysis had drawn round the wrong
+  thing — the group's density edge about its centre of mass, which an
+  attached impactor or a curtain of ejecta pulls most of a radius off. Now the
+  analysis finds a body's centre from the material it is mostly made of
+  and its edge about that centre, and the atmosphere does what a giant
+  impact does to one: over the eight minutes after contact loses the share
+  the ground motion throws off — Schlichting, Sari & Yalinewich's
+  0.4x + 1.4x² − 0.8x³ of x = (v/v_esc)(m/M): a tenth for Theia, a third
+  for a hit & run, all of it for twins and the shatter — and every bit of
+  it over the hot ground; none of it comes back.
 - **2026-08-29 — The air of that world.** The blue limb was today's sky, and
   today's sky is nitrogen and two billion years of oxygen away from the
   giant impact: a proto-Earth wears the steam its magma ocean boils off —

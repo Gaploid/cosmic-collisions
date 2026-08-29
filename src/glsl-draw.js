@@ -698,15 +698,14 @@ var SUN_FS = [
   '}'
 ].join('\n');
 
-// The atmosphere: a shell round each ball, thin on a cold body and puffed
-// on a hot one, that scatters the sun's light — the path through it is
-// longest at the limb, so the limb glows, and brightest looking toward the
-// sun, so a planet in front of the sun wears a ring — and, on a hot body,
-// glows with its own vapour. Integrated along the ray in eight steps from
-// where it enters the shell to where it meets the ball or the skin, and
-// added over the picture. A shell thinner than the pixels is drawn as wide
-// as them and as much fainter, so the far view keeps a soft limb and not a
-// crawling one.
+// The atmosphere: a shell round each ball that scatters the sun's light —
+// the path through it is longest at the limb, so the limb glows, and
+// brightest looking toward the sun, so a planet in front of the sun wears a
+// ring — less the hole the impact blew in it, over the hot ground.
+// Integrated along the ray in eight steps from where it enters the shell
+// to where it meets the ball or the skin, and added over the picture. A
+// shell thinner than the pixels is drawn as wide as them and as much
+// fainter, so the far view keeps a soft limb and not a crawling one.
 var ATM_FS = [
   '#version 300 es',
   'precision highp float;',
@@ -719,9 +718,9 @@ var ATM_FS = [
   'uniform int uNB;',
   'uniform vec4 uBall[2];',        // centre in eye space, the radius the skin is drawn at
   'uniform vec3 uAtmCol[2];',      // what the shell scatters
-  'uniform vec3 uAtmEm[2];',       // and what it glows with of itself
   'uniform float uAtmH[2];',       // its thickness, in radii
-  'uniform vec4 uAtmHot[2];',      // where the body's heat is, in eye space, and how far it reaches: the vapour is boiled off there
+  'uniform vec4 uAtmHot[2];',      // where the body's heat is, in eye space, and how far it reaches: the air over it is gone
+  'uniform float uAtmHole[2];',    // how far gone, 0 to 1
   'uniform float uRad;',           // a particle's radius: how far the skin may stand off the ball
   'uniform float uEdge;',          // the skin's silhouette cut and its feather, as the shade pass has them
   'uniform float uEdgeSoft;',
@@ -747,8 +746,8 @@ var ATM_FS = [
   '    float pxu = 0.5 * uRes.y / uInvP.y / max(-C.z, 0.05);',
   '    float thick = H * R * pxu, k = 1.0;',
   '    if (thick < 3.0) { k = thick / 3.0; H = 3.0 / (R * pxu); }',
-  '    vec3 hotC = uAtmHot[i].xyz; float hotR = uAtmHot[i].w, hotK = length(uAtmEm[i]) > 0.0 ? 1.0 : 0.0;',
-  '    float Hm = H * (1.0 + 1.5 * hotK), Ro = R * (1.0 + Hm) + 3.0 * uRad;',   // the shell as wide as the vapour can puff it, and as far out as the skin may stand
+  '    float Ro = R * (1.0 + H) + 3.0 * uRad;',   // the shell, and as far out as the skin may stand
+  '    vec3 hotC = uAtmHot[i].xyz; float hotR = uAtmHot[i].w, hole = uAtmHole[i];',
   '    float b = dot(ray, C), cc = dot(C, C);',
   '    float disc = b * b - (cc - Ro * Ro);',
   '    if (disc <= 0.0) continue;',
@@ -761,7 +760,7 @@ var ATM_FS = [
   '    float Rl = R;',
   '    if (skinA < 0.999) {',
   '      vec2 cpx = ((C.xy / (-C.z)) / uInvP * 0.5 + 0.5) * uRes - gl_FragCoord.xy;',
-  '      float dl = length(cpx), span = (Hm * R + 3.0 * uRad) * pxu, g = 3.0 * span;',
+  '      float dl = length(cpx), span = (H * R + 3.0 * uRad) * pxu, g = 3.0 * span;',
   '      if (dl > 1.0) {',
   // three walks abreast, two particles apart along the limb, and their
   // mean: the silhouette is a staircase of discs, and a floor that followed
@@ -786,21 +785,19 @@ var ATM_FS = [
   '    t1 = mix(tOut, tIn, skinA);',
   '    if (t1 <= t0) continue;',
   '    float dt = (t1 - t0) / 8.0;',
-  // the vapour: over the heat — a plume over the contact at first, the
-  // whole shell once the body is molten through — the shell is thicker,
-  // glows of itself, and scatters warm rather than blue
-  '    float acc = 0.0, lit = 0.0, hotA = 0.0;',
+  // the shell's density falls off with the height over its floor, only
+  // the day side is lit, and over the hot ground the air is gone — the
+  // hole's edge feathered over a third of a radius
+  '    float lit = 0.0;',
   '    for (int j = 0; j < 8; j++) {',
   '      vec3 x = ray * (t0 + dt * (float(j) + 0.5)); vec3 rel = x - C; float r = length(rel);',
-  '      float dh = max(distance(x, hotC) - hotR, 0.0) / (0.3 * R);',
-  '      float hw = hotK * exp(-dh * dh);',
-  '      float hgt = clamp((r - Rl) / (H * R * (1.0 + 1.5 * hw)), 0.0, 1.0);',
+  '      float hgt = clamp((r - Rl) / (H * R), 0.0, 1.0);',
   '      float dens = exp(-hgt * 3.0) * (1.0 - hgt) * (1.0 - hgt);',
   '      float day = smoothstep(-0.2, 0.35, dot(rel / max(r, 1e-6), uSunEye));',
-  '      acc += dens; lit += dens * day * (1.0 - hw); hotA += dens * hw;',
+  '      float dh = max(distance(x, hotC) - hotR, 0.0) / (0.3 * R);',
+  '      lit += dens * day * (1.0 - hole * exp(-dh * dh));',
   '    }',
-  '    float norm = dt / (H * R) * k * uK;',
-  '    col += (uAtmCol[i] * lit * (1.0 + 2.0 * fwd) + vec3(1.0, 0.55, 0.3) * 0.35 * hotA * (1.0 + fwd) + uAtmEm[i] * hotA) * norm;',
+  '    col += uAtmCol[i] * lit * (1.0 + 2.0 * fwd) * dt / (H * R) * k * uK;',
   '  }',
   '  o = vec4(col, 1.0);',
   '}'
