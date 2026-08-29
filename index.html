@@ -305,8 +305,14 @@ function frame() {
   requestAnimationFrame(frame);
   resize();
   if (sim) {
-    if (sim.phase === 'settle') NB.settleSome(Math.max(2, Math.round(65536 / sim.N * 16)));   // twice the steps a frame: the settle is twice as long as it was, and it is the first thing anyone sees
-    else if (!CC.run.paused) {
+    if (sim.phase === 'settle') {
+      NB.settleSome(Math.max(2, Math.round(65536 / sim.N * 16)));   // twice the steps a frame: the settle is twice as long as it was, and it is the first thing anyone sees
+      // the settle's last frame: the first look at the bodies, taken here
+      // and now, so the first frame out from under the loader is whole —
+      // the shell and the light with it — and not a half-second later,
+      // when the worker's first report would have come in
+      if (sim.phase !== 'settle') NB.analyze(true);
+    } else if (!CC.run.paused) {
       if (sim.phase === 'approach') NB.rigidStep(0.0025 * S.speed);
       else {
         stepAcc += S.speed;

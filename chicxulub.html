@@ -1418,7 +1418,7 @@ function globeReport(rep) {
 // the planet view's frame is the giant impact's: the engine settles, flies
 // the rock in on rails, and steps the collision
 function planetFrame() {
-  if (sim.phase === 'settle') NB.settleSome(Math.max(2, Math.round(65536 / sim.N * 16)));
+  if (sim.phase === 'settle') { NB.settleSome(Math.max(2, Math.round(65536 / sim.N * 16))); if (sim.phase !== 'settle') NB.analyze(true); }   // the first look under the loader, as the giant impact's page takes it
   else if (run.paused) return;
   else if (sim.phase === 'approach') NB.rigidStep(0.0025 * S.speed);
   else {

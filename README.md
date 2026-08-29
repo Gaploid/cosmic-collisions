@@ -103,6 +103,19 @@ credit.
 
 Broad strokes, newest first; the commit history tells each one in full.
 
+- **2026-08-29 — Whole from the first frame.** The loader lifted and the
+  shell came half a second after it, with the worker's first report. The
+  settle's last frame now takes the first look itself, synchronously, so
+  the first frame out from under the loader has the shell and the light on
+  it.
+- **2026-08-29 — Keeping up at 4×.** A frame at 4× is sixteen steps, and
+  the picture's easing ran per frame: the ball trailed the body four times
+  as far, and on the approach the report — a dozen frames old and carried
+  by its velocity — missed the flight's acceleration by six particles,
+  so the shell stood off the limb. The easing now runs by the sim's clock,
+  the approach takes its centres from the two-body solution it flies on,
+  and the sparks' streaks are a 1× frame of motion at any speed — a film
+  run fast does not blur more.
 - **2026-08-29 — The tilt.** Both bodies spun about the orbital axis and
   the impact lay in the orbital plane, so the merged planet's axis had
   nowhere to turn. Now the impactor can come in from above the plane —
