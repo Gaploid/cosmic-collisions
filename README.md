@@ -8,72 +8,90 @@ that gathers out of it. Or a fourteen-kilometre asteroid comes down on the
 Yucatán at twenty kilometres a second and opens a ninety-kilometre bowl in
 eighty seconds. A page each, over one engine.
 
-- **[Giant impact](https://gaploid.github.io/cosmic-collisions/)** — Theia and
-  the proto-Earth, and the Moon that comes out of the disk.
-- **[Chicxulub](https://gaploid.github.io/cosmic-collisions/chicxulub.html)** —
-  the impact that ended the Cretaceous, at two scales: the crater it digs, and
-  the plume that comes out of it and reaches the far side of the world.
+## Scenarios
 
-## The giant impact
+**[Giant impact](https://gaploid.github.io/cosmic-collisions/)** — a proto-Earth
+and an impactor from 0.02 to 1 M⊕, iron core to mantle to crust, 16k to 262k
+particles falling together under their own gravity: the splash, the tidal arm,
+the disk, and the Moon that gathers out of it. Five *what if*s — the canonical
+*theia*; a Theia grown to Earth's own mass (*twins*); one coming in flat and
+dead-on (*head-on*); one grazing too fast to be caught (*hit & run*); one fast
+enough to take both bodies apart (*shatter*) — and mass, angle, how far above
+the plane, speed, bounce, core and density are all knobs, so the next what-if
+is a restart away. The readout holds still: what stays, what orbits, what
+escapes, the Moon that disk would make, and the books on momentum, angular
+momentum and energy. Drag rotates · wheel zooms · Space pauses · R restarts ·
+F follows; a phone opens at 33k particles and gives back pixels, never
+physics.
 
-Not a shape to assemble but a simulation. A proto-Earth and an impactor from
-0.02 to 1 M⊕, differentiated iron core to mantle to crust, both arriving with an
-eight-hour day: 16k to 262k particles, each pulling on all the others, touching
-ones pushing back like a stiff spring and bleeding the energy into heat that
-stays in the rock and lights it, deep red past 900 K, white past 40 000.
+**[Chicxulub](https://gaploid.github.io/cosmic-collisions/chicxulub.html)** —
+the impact that ended the Cretaceous, at two scales. *The crater:* Yucatán
+carbonate over crystalline basement, a carbonaceous asteroid at 20 km/s and 60°
+from the north-east; the curtain goes up and the transient bowl opens in about
+eighty seconds, with presets from 1 km to 30 km and a readout of energy, ejecta,
+melt and seismic magnitude. *The first day:* the crater is a dot, but the plume
+outruns the atmosphere, arcs over half a world and is down everywhere within two
+hours — that, not the crater, is what ended the Cretaceous. Between them sits a
+breakable Earth, honest about what it cannot show: a grain is 218 km across and
+the rock was 14, so it is drawn as the one grain it is worth, does nothing, and
+says so. Sources, as on the page: Collins 2005 and 2020, Housen & Holsapple
+2011, Melosh 1989, Expedition 364, Fischer-Gödde 2024.
 
-Five presets — *theia*, the canonical Moon-forming impact; *head-on*;
-*hit & run*; *twins*; *shatter*. The readout is a fixed table, the same rows in
-the same columns from the first look to the last: what stays, what orbits and
-what escapes, what Moon that disk would make by the Ida–Canup–Stewart scaling,
-and the books on momentum, angular momentum and energy. In the advanced panel,
-mass, angle, speed, particle count, bounce, core and density restart the run;
-exposure, glow, shading, stars, atmosphere, sparks, lens and drift do not.
+## Simulation
 
-Drag rotates · wheel or pinch zooms · Space pauses · R restarts · F follows the
-largest body. On a phone it opens at 33k particles and gives back pixels — never
-physics — if the frames start to cost too much.
+What runs:
 
-Not SPH — no shocks, no vaporization — but the deformation, the tidal arm, the
-disk and the re-accretion are all there.
+- **Gravity, from the particles themselves.** A 64³ particle mesh with a
+  block-to-block far field, and everything loose — the arm, the disk, the
+  escapers — corrected pairwise against it, P³M-style, so moonlets bind
+  instead of smearing. The Chicxulub crater page swaps it for a constant *g*
+  and down: a patch of ground too small to pull on itself.
+- **Contact.** A spring-dashpot along the line between two touching grains,
+  with no tension: the material resists being squeezed, and can be pulled
+  apart for nothing.
+- **Heat.** The dashpot's work stays in the rock as a temperature, conducts
+  from grain to grain, and lights the scene by it — deep red past 900 K, white
+  past 40 000.
+- **Structure and spin.** Differentiated bodies, each material with its own
+  density and heat capacity, built as onions of Fibonacci shells, relaxed and
+  crept into equilibrium, arriving as the Maclaurin spheroid an eight-hour day
+  asks for, on a two-body approach solved on the CPU.
+- **The books.** Symplectic Euler, and momentum, angular momentum and energy
+  kept and shown to a fraction of a percent.
+- **The first second at Chicxulub.** A contact model has no shock, so the
+  excavation flow is given to it — Housen & Holsapple's speeds, Maxwell's
+  Z-model directions, stopping at the transient radius π-group scaling asks
+  for. Everything after that is the sim's own.
 
-## Chicxulub
+What does not:
 
-**The crater.** Yucatán carbonate over crystalline basement, and a carbonaceous
-asteroid at 20 km/s, 60° from the north-east: the curtain goes up, and the
-transient bowl opens in about eighty seconds. Presets run from 1 km to 30 km;
-the readout gives energy, ejecta, melt, seismic magnitude, and the crater dug
-beside the one the scaling asks for.
-
-**The planet.** The Earth of the giant impact, with a rock thrown at it — and
-honest about what it cannot show: a grain is 218 km across and the rock was 14,
-so it is drawn as the one grain it is worth, does nothing, and says so. The
-surface starts to break a few hundred kilometres up; past 2000 km the
-giant-impact page takes over.
-
-**The first day.** The crater as a dot. Nothing deforms, but the plume outruns
-the atmosphere, arcs over half a world and is down everywhere within two hours —
-that, not the crater, is what ended the Cretaceous.
-
-**The numbers.** A contact model has no shock, so its first second is given to
-it: an excavation flow with Housen & Holsapple's speeds and Maxwell's Z-model
-directions, stopping at the transient radius π-group scaling gives. Everything
-after is the sim's own; the sulfur wants a hydrocode and is quoted, not run.
-Sources, as on the page: Collins 2005 and 2020, Housen & Holsapple 2011, Melosh
-1989, Expedition 364, Fischer-Gödde 2024.
+- **No SPH, no equation of state** — no pressure, no shock, no vaporization.
+  The deformation, the tidal arm, the disk and the re-accretion are all there;
+  the phase change is not.
+- **No strength** — no cohesion, no tensile strength, no fracture, no friction
+  across a contact. The rock is a pile of grains that resists compression and
+  nothing else.
+- **No cooling, no latent heat** — over the hours a run covers nothing
+  radiates away, and melting and freezing cost nothing.
+- **No fluid air or ocean** — the atmosphere a body wears is drawn, not
+  solved, and what a giant impact strips off it is a rule of thumb.
+- **No chemistry, no climate** — Chicxulub's sulfur and the winter after it
+  want a hydrocode; they are quoted on the page, not run.
+- **Resolution** — a grain of Earth is a couple of hundred kilometres across,
+  so anything smaller is a number on the readout rather than a thing on the
+  screen.
+- **The Moon itself** — the disk is simulated; the Moon it would eventually
+  make is the Ida–Canup–Stewart scaling, not a run.
 
 ## Tech
 
 A page per scenario over a shared engine in `src/`, wired with plain script
 tags — no dependencies, no build step, and a page still opens from disk. It is
-WebGL 2 with no compute shaders to lean on, so the hard parts are tricks:
-contacts from a hashed grid filled by depth-peeling, gravity from a 64³ particle
-mesh — its far field block to block, so it pushes nothing — with the loose
-material corrected pairwise against it, P³M-style, so moonlets bind instead of
-smearing. Its bodies are onions of Fibonacci-spiral
-shells, relaxed and then crept into equilibrium so that nothing pops out of the
-surface; symplectic Euler, Morton order, and books on momentum and energy that
-caught most of what was wrong. The picture is screen-space fluid rendering —
+WebGL 2 with no compute shaders to lean on, so the hard parts are tricks: the
+contact grid is hashed and filled by depth-peeling, standing in for an atomic
+counter; the gravity mesh does its far field block to block, so that it never
+pushes itself; the particles are kept in Morton order, so a grain's neighbours
+sit beside it in the texture. The picture is screen-space fluid rendering —
 impostors, a bilateral blur that melts them into a skin, a coverage cut that
 takes the beads off the limb — with a surface drawn in each grain's own
 coordinates so it rides the material, and hot rock glowing by its temperature
@@ -87,17 +105,12 @@ shafts, an anamorphic streak and ghosts off the brightest, a heat shimmer,
 chromatic aberration, grain, a split tone. GGX, ACES and FXAA; every knob is
 in `__impact.look`.
 
-## The sky
-
-The starfield is the real one: the Yale Bright Star Catalogue, every star down
-to magnitude 6 — 5080 of them, each carrying its right ascension, declination,
-visual magnitude and B-V colour index in six bytes, 30 KB embedded in the page
-as base64. They sit on the celestial sphere and turn with the world, with the
-Milky Way behind them where it really is.
-
-Star positions from the Bright Star Catalogue, 5th Revised Ed. (Hoffleit &
-Warren), via the Harvard/SAO catalogue archive. Public domain / free to use with
-credit.
+The starfield is the real sky: every star down to magnitude 6 — 5080 of them,
+each six bytes of right ascension, declination, magnitude and colour, 30 KB of
+base64 in the page — on the celestial sphere, turning with the world, with the
+Milky Way behind it where it really is. Positions from the Bright Star
+Catalogue, 5th Revised Ed. (Hoffleit & Warren), via the Harvard/SAO catalogue
+archive; public domain, free to use with credit.
 
 ## Changelog
 

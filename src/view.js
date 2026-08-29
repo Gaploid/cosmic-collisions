@@ -31,7 +31,7 @@ var lastLights = null;
 // with it pulses on everything it touches. Per body: the offset that
 // absorbs a report's jump, the radius, the surface temperature, the hot
 // centroid and its spread, and the atmosphere's fade. Reset with the run
-var bodySmooth = [], lightGen = -1;
+var bodySmooth = [], lightGen = -1, impK = 0, impSim = null;
 // the melt's frame: the convection cells are drawn in coordinates that turn
 // with the body — its spin axis and day from the report, the angle run up
 // with the sim's clock at 805 s a unit — or the crust, drawn in the grains'
@@ -325,6 +325,11 @@ function render() {
     // four times the steps, and a rate set per frame would trail the body
     // four times as far — the shell stood off the limb at speed
     var spf = Math.max(1, (S.speed || 4) / 4), ease = function (r) { return 1 - Math.pow(1 - r, spf); }, decay = Math.pow(0.93, spf);
+    // what is an appearance rather than a position — a temperature, a hot
+    // spread, a light coming on — eases no faster than twice the 1× rate,
+    // or at 4× a light came on in three frames, which is a flicker
+    var spfA = Math.min(spf, 2), easeA = function (r) { return 1 - Math.pow(1 - r, spfA); };
+    if (impSim !== sim) { impSim = sim; impK = 0; }
     bodies.forEach(function (bd, bi) {
       // the picture's view of the body, eased. The report comes every few
       // dozen frames and moves the centre of mass a little each time — as
@@ -359,7 +364,7 @@ function render() {
       // clump in the arm is neither round nor airy, and a shell round it was
       // a ring on a lump
       var planet = bi === 0 || (bd.mass >= 0.06 && bd.dist > bodies[0].R + 2.5 * bd.R);
-      var fresh = function (k) { return { off: [0, 0, 0], prev: pc, rep: report, R: Rd, Ts: bd.Tsurf, hot: hoff.slice(), hotR: bd.hotR || 0, k: k, hit: giant && bd.Tsurf >= 3000 ? sim.t - 1 : null }; };
+      var fresh = function (k) { return { off: [0, 0, 0], prev: pc, rep: report, R: Rd, Ts: bd.Tsurf, hot: hoff.slice(), hotR: bd.hotR || 0, k: k, lit: 0, simRef: sim, hit: giant && bd.Tsurf >= 3000 ? sim.t - 1 : null }; };
       var bs = bodySmooth[bi];
       if (!bs || lightGen !== sim.gen) bs = bodySmooth[bi] = fresh(planet ? 1 : 0);
       else if (bs.rep !== report) {
@@ -367,7 +372,7 @@ function render() {
         else { for (var q4 = 0; q4 < 3; q4++) bs.off[q4] += bs.prev[q4] - pc[q4]; bs.rep = report; }
       }
       bs.prev = pc;
-      var e8 = ease(0.08), e10 = ease(0.1);
+      var e8 = easeA(0.08), e10 = ease(0.1);
       for (var q5 = 0; q5 < 3; q5++) { bs.off[q5] *= decay; bs.hot[q5] += (hoff[q5] - bs.hot[q5]) * e8; }
       bs.R += (Rd - bs.R) * e10; bs.Ts += (bd.Tsurf - bs.Ts) * e8; bs.hotR += ((bd.hotR || 0) - bs.hotR) * e8;
       bs.k += ((planet ? 1 : 0) - bs.k) * e8;
@@ -383,7 +388,14 @@ function render() {
       var strip = bs.hit === null ? 0 : Math.min(Math.max((sim.t - bs.hit) / 0.6, 0), 1), air = 1 - lost * strip;
       var cw = [pc[0] + bs.off[0], pc[1] + bs.off[1], pc[2] + bs.off[2]];
       var e = toEye(cw[0], cw[1], cw[2]);
-      occlude(e, bd.R);                                  // every body shadows the other's light
+      // a second body's light and shadow came and went with the report's
+      // naming of it — a clump falling back is named one look and part of
+      // the planet the next, and the planet's lit side flickered with it.
+      // They fade in over half a second now, and a body the report has
+      // dropped keeps them fading out below, a ghost carried by its velocity
+      if (bi > 0) bs.lit += (1 - bs.lit) * easeA(0.06); else bs.lit = 1;
+      bs.lastW = cw.slice(); bs.lastV = bd.vel.slice(); bs.lastT = sim.t; bs.lastR = bd.R;
+      occlude(e, bd.R * bs.lit);                         // every body shadows the other's light
       var myBall = -1;
       if (LK.balls && full && nb < 2 && bd.mass > 0) {
         ball[nb * 4] = e[0]; ball[nb * 4 + 1] = e[1]; ball[nb * 4 + 2] = e[2]; ball[nb * 4 + 3] = bs.R;
@@ -417,19 +429,38 @@ function render() {
       var lo = LOOK.hotLight ? bs.hot : [0, 0, 0];
       var el = toEye(cw[0] + lo[0], cw[1] + lo[1], cw[2] + lo[2]);
       lp[nl * 3] = el[0]; lp[nl * 3 + 1] = el[1]; lp[nl * 3 + 2] = el[2];
-      lc[nl * 3] = c[0] * kk; lc[nl * 3 + 1] = c[1] * kk; lc[nl * 3 + 2] = c[2] * kk;
+      lc[nl * 3] = c[0] * kk * bs.lit; lc[nl * 3 + 1] = c[1] * kk * bs.lit; lc[nl * 3 + 2] = c[2] * kk * bs.lit;
       lr[nl] = hr * hr;
+      bs.lastC = [c[0] * kk, c[1] * kk, c[2] * kk]; bs.lastHr = hr; bs.lastLo = lo.slice();
       nl++;
     });
     lightGen = sim.gen;
+    // the ghost: the second body the report dropped this look
+    var gh = bodySmooth[1];
+    if (bodies.length < 2 && gh && gh.simRef === sim && gh.lit > 0.01 && gh.lastW) {
+      gh.lit *= 1 - easeA(0.06);
+      var dtg = sim.t - gh.lastT, gw = [gh.lastW[0] + gh.lastV[0] * dtg, gh.lastW[1] + gh.lastV[1] * dtg, gh.lastW[2] + gh.lastV[2] * dtg];
+      occlude(toEye(gw[0], gw[1], gw[2]), gh.lastR * gh.lit);
+      if (gh.lastC && nl < 2) {
+        lball[nl] = -1;
+        var gl2 = toEye(gw[0] + gh.lastLo[0], gw[1] + gh.lastLo[1], gw[2] + gh.lastLo[2]);
+        lp[nl * 3] = gl2[0]; lp[nl * 3 + 1] = gl2[1]; lp[nl * 3 + 2] = gl2[2];
+        lc[nl * 3] = gh.lastC[0] * gh.lit; lc[nl * 3 + 1] = gh.lastC[1] * gh.lit; lc[nl * 3 + 2] = gh.lastC[2] * gh.lit;
+        lr[nl] = gh.lastHr * gh.lastHr;
+        nl++;
+      }
+    }
     // the impactor, while its material is still a ball inside the merged
     // group — the first hour, before it is smeared over the planet — is a
     // ball in the planet's light too: it hides the planet from its own
     // far side, and from what the contact throws off it
+    // — and it fades rather than switches, the spread crossing the mark
+    // back and forth from one look to the next
     if (hot && report.impMass > 0.003) {
       var ri = Math.cbrt(report.impMass / S.dens);
-      if (report.impRms < 1.3 * 0.775 * ri) occlude(toEye(report.impCom[0] + report.vel[0] * lag, report.impCom[1] + report.vel[1] * lag, report.impCom[2] + report.vel[2] * lag), ri);
-    }
+      impK += ((report.impRms < 1.3 * 0.775 * ri ? 1 : 0) - impK) * easeA(0.06);
+      if (impK > 0.01) occlude(toEye(report.impCom[0] + report.vel[0] * lag, report.impCom[1] + report.vel[1] * lag, report.impCom[2] + report.vel[2] * lag), ri * impK);
+    } else impK = 0;
   }
 
   // 3. compose: the lit skin, then the sky and the sun behind it, and the stars
