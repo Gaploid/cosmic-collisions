@@ -103,6 +103,12 @@ credit.
 
 Broad strokes, newest first; the commit history tells each one in full.
 
+- **2026-08-29 — Tone and grain.** The surfaces were clay: one matte tone
+  shaded softly. Now the highlands stand paler and the lowlands deeper, a
+  cratered crust wears maria — the low plains its old lava flooded, dark,
+  smooth and with fewer craters, being younger — and the regolith has a
+  grain, a speckle that fades out as its period nears a pixel so the far
+  view does not crawl. 0.2 ms more on the close view.
 - **2026-08-29 — Craters and seas.** The craters were dimples on a golf
   ball, two sizes of them; now they are craters — a flat floor, a wall up to
   a narrow crest, an ejecta blanket, a central peak in the biggest, rays

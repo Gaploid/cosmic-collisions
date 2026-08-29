@@ -376,27 +376,34 @@ var SHADE_FS = [
   // there are four times as many at half the size, as there are — a height
   // for the relief, a tone for the albedo (0 in the lowlands, 1 on the
   // highlands), the crater floors and the bright ejecta and rays, a crack
-  // pattern for the crust a magma ocean wears, and on a crust with seas
-  // the water: everything below a level, flat, and deeper further out
-  'void surface(vec3 q, float crust, float seas, out float h, out float tone, out float floors, out float bright, out float crack, out float water, out float deep) {',
+  // pattern for the crust a magma ocean wears, on a crust with seas the
+  // water — everything below a level, flat, and deeper further out — and
+  // on a crust the maria: the low plains a body's old lava flooded, dark,
+  // smooth and with fewer craters than the highlands, being younger; and
+  // over everything the regolith's grain, a speckle too fine for the far
+  // view, where the caller lets it go
+  'void surface(vec3 q, float crust, float seas, out float h, out float tone, out float floors, out float bright, out float crack, out float water, out float deep, out float grain) {',
   '  int oct = uDetail > 1.5 ? 4 : 3;',
   '  float cont = fbm(q * 1.7, oct);',
   '  float det = fbm(q * 6.5 + 3.1, oct - 1);',
   '  float lvl = 0.15 * seas, sl = cont + 0.3 * det - lvl;',
   '  water = seas * (1.0 - smoothstep(-0.02, 0.02, sl));',
   '  deep = smoothstep(0.0, 0.08, -sl);',
+  '  float maria = crust * (1.0 - seas) * smoothstep(0.12, 0.22, fbm(q * 1.2 + 5.0, 3));',
   '  vec4 c = vec4(0.0);',
   '  if (uDetail > 1.5 && crust > 0.0) {',
   '    vec3 up = normalize(q + vec3(1e-4, 2e-4, 3e-4));',
   '    vec4 c1 = craters(q * 2.2, 0.25, up), c2 = craters(q * 4.5 + 7.0, 0.35, up), c3 = craters(q * 9.0 + 3.0, 0.45, up), c4 = craters(q * 18.0 + 11.0, 0.5, up);',
   '    c.x = (c1.x / 2.2 + c2.x / 4.5 + c3.x / 9.0 + c4.x / 18.0) * 8.0;',
   '    c.yzw = max(max(c1.yzw, c2.yzw), max(c3.yzw, c4.yzw));',
-  '    c *= crust * (1.0 - water);',
+  '    c *= crust * (1.0 - water) * (1.0 - 0.7 * maria);',
   '  }',
-  '  h = (1.0 - water) * (cont + det * 0.4 - lvl + c.x);',
-  '  tone = clamp(0.5 + (cont - lvl) * 1.4 + det * 0.45 + c.x * 0.5, 0.0, 1.0);',
+  '  h = (1.0 - water) * ((cont + det * 0.4 - lvl) * (1.0 - 0.6 * maria) + c.x);',
+  '  tone = clamp(0.5 + (cont - lvl) * 1.9 + det * 0.6 + c.x * 0.5, 0.0, 1.0);',
+  '  tone = mix(tone, tone * 0.3, maria);',
   '  floors = clamp(c.y, 0.0, 1.0); bright = clamp(c.z + 1.5 * c.w, 0.0, 1.0);',
   '  crack = 1.0 - smoothstep(0.0, 0.12, abs(fbm(q * 8.0 + 21.0, 3)));',
+  '  grain = fbm(q * 45.0 + 9.0, 2);',
   '}',
   'void main() {',
   '  ivec2 me = ivec2(gl_FragCoord.xy);',
@@ -480,9 +487,12 @@ var SHADE_FS = [
   // the derivatives the hardware keeps, tilts the normal — bump mapping with
   // no parametrisation (Mikkelsen) — with a cap on the tilt where the home
   // field jumps between grains of different origin, and none across a step
-  '  float h = 0.0, tone = 0.5, floors = 0.0, bright = 0.0, crack = 0.0, water = 0.0, deep = 0.0;',
-  '  if (uDetail > 0.5) surface(hm.xyz, crust, seas, h, tone, floors, bright, crack, water, deep);',
+  '  float h = 0.0, tone = 0.5, floors = 0.0, bright = 0.0, crack = 0.0, water = 0.0, deep = 0.0, grain = 0.0;',
+  '  if (uDetail > 0.5) surface(hm.xyz, crust, seas, h, tone, floors, bright, crack, water, deep, grain);',
   '  tone = mix(0.5, tone, coh); floors *= coh; bright *= coh; crack *= coh; water *= coh;',
+  // the grain goes as its period nears a pixel — the home field's step
+  // across the screen against the noise's — or it would crawl
+  '  grain *= coh * (1.0 - smoothstep(0.2, 0.45, length(fw) * 45.0));',
   '  float hh = h * uRad * uBump * coh;',
   '  vec3 dpx_ = dFdx(p), dpy_ = dFdy(p);',
   '  float dhx = dFdx(hh), dhy = dFdy(hh);',
@@ -508,8 +518,8 @@ var SHADE_FS = [
   '  float lum0 = dot(base, vec3(0.3, 0.59, 0.11));',
   '  vec3 rock = mix(base, mix(vec3(lum0), base, 0.3) * vec3(0.6, 0.57, 0.53), seas);',
   '  float lum = dot(rock, vec3(0.3, 0.59, 0.11));',
-  '  vec3 low = mix(vec3(lum), rock, 1.45) * 0.5, high = mix(vec3(lum), rock, 0.45) * 1.35;',
-  '  vec3 alb = uDetail > 0.5 ? mix(low, high, tone) * (1.0 - 0.2 * floors) * (1.0 + 0.4 * bright) : base;',
+  '  vec3 low = mix(vec3(lum), rock, 1.45) * 0.42, high = mix(vec3(lum), rock, 0.45) * 1.4;',
+  '  vec3 alb = uDetail > 0.5 ? mix(low, high, tone) * (1.0 - 0.2 * floors) * (1.0 + 0.4 * bright) * (1.0 + 0.3 * grain) : base;',
   '  water *= 1.0 - warm;',
   '  alb = mix(alb, mix(base * 1.1 + vec3(0.0, 0.06, 0.0), base * 0.55, deep), water);',
   '  alb = mix(alb, alb * 0.3 + vec3(0.03, 0.015, 0.01), max(molten, 0.5 * warm));',
