@@ -181,7 +181,7 @@ var render = VIEW.render, resize = VIEW.resize, governQuality = VIEW.governQuali
 // the ball's normal and silhouette — with iron cores that are metal, and a
 // surface drawn on them, craters and all; a phone gets the surface without
 // the craters
-VIEW.setLook({ balls: true, metal: [1, 0, 0, 0, 1, 0, 0, 0], detail: PHONE ? 1 : 2 });
+VIEW.setLook({ balls: true, metal: [1, 0, 0, 0, 1, 0, 0, 0], surface: [0, 0, 2, 0, 0, 0, 1, 0], detail: PHONE ? 1 : 2 });   // the cores metal, the mantles bare, Earth's crust with seas, Theia's cratered
 
 // ---------- the engine ----------
 // src/nbody.js: the meshes, the passes, the step, the approach and the

@@ -32,25 +32,44 @@ var GLSL_NOISE = [
   '  for (int i = 0; i < 6; i++) { if (i >= oct) break; s += a * gnoise(p); p = p * 2.03 + vec3(11.7, 5.3, 7.9); a *= 0.5; }',
   '  return s;',
   '}',
-  // craters: a jittered lattice of cells, a bowl in the cells that have one
-  // (a fraction fill of them), each of its own size. The surface cuts the
-  // lattice on a curve, so a bowl is big where the cut passes near its centre
-  // and small or absent where it passes wide: a spread of sizes for free.
-  // Returns the height — the floor down, the rim up — and a mask of the floor.
-  'vec2 craters(vec3 p, float fill) {',
+  // craters: a jittered lattice of cells, a crater in the cells that have
+  // one (a fraction fill of them), each of its own size, and the nearest
+  // one — in its own radii — owning the point. The surface cuts the lattice
+  // on a curve, so a crater is deep where the cut passes near its centre
+  // and a shallow dish where it passes wide: a spread of shapes for free.
+  // The profile is a crater's: a floor, flat in the big ones, a wall up to
+  // a narrow crest a quarter of the depth above the plain, an ejecta
+  // blanket falling away beyond it, and in the biggest a central peak; a
+  // few fresh ones throw rays, seven streaks about the axis the surface
+  // stands on. The height is in the crater's own radii, so a small one is
+  // shallow. Returns the height and masks of the floor, the bright ejecta
+  // with the crest, and the rays.
+  'vec4 craters(vec3 p, float fill, vec3 up) {',
   '  vec3 i = floor(p), f = p - i;',
-  '  float best = 9.0;',
+  '  float best = 9.0, brr = 0.3; vec3 bg = vec3(0.5), br = vec3(0.0); ivec3 bc = ivec3(0);',
   '  for (int z = -1; z <= 1; z++) for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {',
-  '    vec3 g = grad3(ivec3(i) + ivec3(x, y, z)) * 0.5 + 0.5;',
+  '    ivec3 cc = ivec3(i) + ivec3(x, y, z);',
+  '    vec3 g = grad3(cc) * 0.5 + 0.5;',
   '    if (g.z > fill) continue;',
   '    vec3 r = vec3(float(x), float(y), float(z)) + g * 0.7 + 0.15 - f;',
   '    float rr = 0.2 + 0.24 * g.y;',
-  '    best = min(best, dot(r, r) / (rr * rr));',
+  '    float dd = dot(r, r) / (rr * rr);',
+  '    if (dd < best) { best = dd; bg = g; br = r; brr = rr; bc = cc; }',
   '  }',
   '  float d = sqrt(best);',
-  '  float bowl = d < 1.0 ? -(1.0 - d * d) : 0.0;',
-  '  float rim = smoothstep(0.7, 1.0, d) * (1.0 - smoothstep(1.0, 1.45, d));',
-  '  return vec2(bowl * 0.8 + rim * 0.5, 1.0 - smoothstep(0.8, 1.0, d));',
+  '  if (d > 2.6) return vec4(0.0);',
+  '  float big = smoothstep(0.30, 0.42, brr), fl = mix(0.3, 0.6, big);',
+  '  float wall = smoothstep(fl, 1.0, d);',
+  '  float inside = -1.0 + 1.25 * wall + big * 0.45 * (1.0 - smoothstep(0.0, 0.2, d));',
+  '  float outside = 0.25 * pow(1.0 - clamp((d - 1.0) / 0.7, 0.0, 1.0), 1.5);',
+  '  float h = (d < 1.0 ? inside : outside) * brr;',
+  '  float fresh = step(0.86, bg.x);',
+  '  vec3 a1 = normalize(cross(up, abs(up.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0))), a2 = cross(up, a1);',
+  '  float ang = atan(dot(br, a2), dot(br, a1)) + 6.2832 * bg.x;',
+  '  float rays = fresh * pow(0.5 + 0.5 * cos(ang * 7.0), 10.0) * smoothstep(0.9, 1.2, d) * (1.0 - smoothstep(1.4, 2.6, d));',
+  '  float floors = d < 1.0 ? 1.0 - smoothstep(0.8 * fl, 1.2 * fl, d) : 0.0;',
+  '  float bright = smoothstep(0.7, 1.0, d) * (1.0 - smoothstep(1.0, 1.8, d)) * (0.5 + 0.5 * fresh);',
+  '  return vec4(h, floors, bright, rays);',
   '}'
 ].join('\n');
 
@@ -83,13 +102,13 @@ var G_VS = [
   'uniform float uPx;',
   'uniform float uMaxPt;',
   'uniform float uFat;',
-  'uniform float uMetal[8];',  // which materials are metal, by index — the page says
+  'uniform float uKind[8];',   // what kind of surface each material wears, by index — the page says: -1 metal, 0 bare rock, 1 a cratered crust, 2 a crust with seas
   GLSL_MATCOL,
   'out float vZc;',
   'out float vR;',
   'out float vNb;',
   'out vec4 vMat;',        // rgb — material, a — temperature
-  'out vec4 vHome;',       // xyz — home, w — metal
+  'out vec4 vHome;',       // xyz — home, w — the kind of surface
   'void main() {',
   '  ivec2 tc = ivec2(gl_VertexID % uSize.x, gl_VertexID / uSize.x);',
   '  vec4 P = texelFetch(uPos, tc, 0);',
@@ -98,7 +117,7 @@ var G_VS = [
   '  vZc = e.z;',
   '  vR = uRad * pow(max(texelFetch(uMat, tc, 0).r, 1e-9), uRadPow) * mix(1.0, uFat, smoothstep(0.0, 6.0, vNb));',    // packed particles run fat, so the skin has no gaps
   '  vMat = vec4(matColor(P.w), texelFetch(uVel, tc, 0).w);',
-  '  vHome = vec4(texelFetch(uHome, tc, 0).xyz * uHomeOn, uMetal[clamp(int(P.w + 0.5), 0, 7)]);',
+  '  vHome = vec4(texelFetch(uHome, tc, 0).xyz * uHomeOn, uKind[clamp(int(P.w + 0.5), 0, 7)]);',
   '  gl_Position = uProj * e;',
   '  gl_PointSize = clamp(2.1 * vR * uPx / max(-e.z, 0.05), 1.0, uMaxPt);',
   '}'
@@ -273,7 +292,7 @@ var SHADE_FS = [
   'uniform sampler2D uMat;',
   'uniform sampler2D uDep;',
   'uniform sampler2D uDepRaw;',  // the depth before the blur: the particles themselves
-  'uniform sampler2D uHome;',    // the smoothed home field: xyz — the grain's own coordinates, w — how much of the material is metal
+  'uniform sampler2D uHome;',    // the smoothed home field: xyz — the grain's own coordinates, w — the kind of surface, -1 metal to 2 seas, blended across a boundary
   'uniform vec2 uInvP;',        // 1/P00, 1/P11
   'uniform vec2 uRes;',
   'uniform vec3 uSunEye;',
@@ -353,18 +372,30 @@ var SHADE_FS = [
   '  return n.z < 0.0 ? -n : n;',
   '}',
   // the surface, in the grain's own coordinates: continents and hills from
-  // the noise, craters on top — a height for the relief, a tone for the
-  // albedo (0 in the lowlands, 1 on the highlands), the crater floors, and
-  // a crack pattern for the crust a magma ocean wears
-  'void surface(vec3 q, out float h, out float tone, out float floors, out float crack) {',
+  // the noise, and on a crust craters on top, four octaves of them so that
+  // there are four times as many at half the size, as there are — a height
+  // for the relief, a tone for the albedo (0 in the lowlands, 1 on the
+  // highlands), the crater floors and the bright ejecta and rays, a crack
+  // pattern for the crust a magma ocean wears, and on a crust with seas
+  // the water: everything below a level, flat, and deeper further out
+  'void surface(vec3 q, float crust, float seas, out float h, out float tone, out float floors, out float bright, out float crack, out float water, out float deep) {',
   '  int oct = uDetail > 1.5 ? 4 : 3;',
   '  float cont = fbm(q * 1.7, oct);',
   '  float det = fbm(q * 6.5 + 3.1, oct - 1);',
-  '  vec2 c = vec2(0.0);',
-  '  if (uDetail > 1.5) c = craters(q * 3.0, 0.5) + 0.55 * craters(q * 8.0 + 7.0, 0.6);',
-  '  h = cont + det * 0.4 + c.x * 0.35;',
-  '  tone = clamp(0.5 + cont * 1.4 + det * 0.45 + c.x * 0.5, 0.0, 1.0);',
-  '  floors = clamp(c.y, 0.0, 1.0);',
+  '  float lvl = 0.15 * seas, sl = cont + 0.3 * det - lvl;',
+  '  water = seas * (1.0 - smoothstep(-0.02, 0.02, sl));',
+  '  deep = smoothstep(0.0, 0.08, -sl);',
+  '  vec4 c = vec4(0.0);',
+  '  if (uDetail > 1.5 && crust > 0.0) {',
+  '    vec3 up = normalize(q + vec3(1e-4, 2e-4, 3e-4));',
+  '    vec4 c1 = craters(q * 2.2, 0.25, up), c2 = craters(q * 4.5 + 7.0, 0.35, up), c3 = craters(q * 9.0 + 3.0, 0.45, up), c4 = craters(q * 18.0 + 11.0, 0.5, up);',
+  '    c.x = (c1.x / 2.2 + c2.x / 4.5 + c3.x / 9.0 + c4.x / 18.0) * 8.0;',
+  '    c.yzw = max(max(c1.yzw, c2.yzw), max(c3.yzw, c4.yzw));',
+  '    c *= crust * (1.0 - water);',
+  '  }',
+  '  h = (1.0 - water) * (cont + det * 0.4 - lvl + c.x);',
+  '  tone = clamp(0.5 + (cont - lvl) * 1.4 + det * 0.45 + c.x * 0.5, 0.0, 1.0);',
+  '  floors = clamp(c.y, 0.0, 1.0); bright = clamp(c.z + 1.5 * c.w, 0.0, 1.0);',
   '  crack = 1.0 - smoothstep(0.0, 0.12, abs(fbm(q * 8.0 + 21.0, 3)));',
   '}',
   'void main() {',
@@ -395,7 +426,10 @@ var SHADE_FS = [
   '  vec3 nR = normalAt(uDepRaw, me, posAt(uDepRaw, me), edgeR);',      // the particle's own: honest at a silhouette, where the smoothed skin's turns any way
   '  vec4 m = texelFetch(uMat, me, 0);',
   '  vec4 hm = texelFetch(uHome, me, 0);',
-  '  float metal = clamp(hm.w, 0.0, 1.0);',
+  // the kind of surface: the page's code per material, on one line so that
+  // the blur's blend across a boundary reads as a blend — metal into rock
+  // fades the metal, rock into crust fades the craters in
+  '  float metal = clamp(-hm.w, 0.0, 1.0), crust = clamp(hm.w, 0.0, 1.0), seas = clamp(hm.w - 1.0, 0.0, 1.0);',
   // whether the home field is a surface here. On rock that holds together
   // the field moves across the screen as the skin does — a pixel's step in
   // home is a pixel's step in space — and a texture drawn in it stands
@@ -446,9 +480,9 @@ var SHADE_FS = [
   // the derivatives the hardware keeps, tilts the normal — bump mapping with
   // no parametrisation (Mikkelsen) — with a cap on the tilt where the home
   // field jumps between grains of different origin, and none across a step
-  '  float h = 0.0, tone = 0.5, floors = 0.0, crack = 0.0;',
-  '  if (uDetail > 0.5) surface(hm.xyz, h, tone, floors, crack);',
-  '  tone = mix(0.5, tone, coh); floors *= coh; crack *= coh;',
+  '  float h = 0.0, tone = 0.5, floors = 0.0, bright = 0.0, crack = 0.0, water = 0.0, deep = 0.0;',
+  '  if (uDetail > 0.5) surface(hm.xyz, crust, seas, h, tone, floors, bright, crack, water, deep);',
+  '  tone = mix(0.5, tone, coh); floors *= coh; bright *= coh; crack *= coh; water *= coh;',
   '  float hh = h * uRad * uBump * coh;',
   '  vec3 dpx_ = dFdx(p), dpy_ = dFdy(p);',
   '  float dhx = dFdx(hh), dhy = dFdy(hh);',
@@ -464,13 +498,20 @@ var SHADE_FS = [
   '  }',
   '  if (alpha <= 0.0) discard;',
   // the material: the palette's colour, darker and deeper in the lowlands,
-  // pale on the highlands; past the melting point the crust is gone — dark
-  // rock, lit by itself — and a crust on its way there chars first
+  // pale on the highlands, darker on a crater's floor and brighter on its
+  // ejecta and rays; on a crust with seas the palette's colour is the
+  // water's, and the land is that colour darkened to basalt; past the melting
+  // point the crust is gone — dark rock, lit by itself — and a crust on
+  // its way there chars first, its seas boiled off before that
   '  float molten = smoothstep(1300.0, 2100.0, m.a), warm = smoothstep(700.0, 1300.0, m.a);',
   '  vec3 base = m.rgb;',
-  '  float lum = dot(base, vec3(0.3, 0.59, 0.11));',
-  '  vec3 low = mix(vec3(lum), base, 1.45) * 0.5, high = mix(vec3(lum), base, 0.45) * 1.35;',
-  '  vec3 alb = uDetail > 0.5 ? mix(low, high, tone) * (1.0 - 0.3 * floors) : base;',
+  '  float lum0 = dot(base, vec3(0.3, 0.59, 0.11));',
+  '  vec3 rock = mix(base, mix(vec3(lum0), base, 0.3) * vec3(0.6, 0.57, 0.53), seas);',
+  '  float lum = dot(rock, vec3(0.3, 0.59, 0.11));',
+  '  vec3 low = mix(vec3(lum), rock, 1.45) * 0.5, high = mix(vec3(lum), rock, 0.45) * 1.35;',
+  '  vec3 alb = uDetail > 0.5 ? mix(low, high, tone) * (1.0 - 0.2 * floors) * (1.0 + 0.4 * bright) : base;',
+  '  water *= 1.0 - warm;',
+  '  alb = mix(alb, mix(base * 1.1 + vec3(0.0, 0.06, 0.0), base * 0.55, deep), water);',
   '  alb = mix(alb, alb * 0.3 + vec3(0.03, 0.015, 0.01), max(molten, 0.5 * warm));',
   '  alb *= 1.0 - 0.6 * metal;',
   // the sun: Lambert with a little wrap at the terminator and a cool fill
@@ -533,9 +574,9 @@ var SHADE_FS = [
   '  }',
   '  ember = mix(ember, ember / (1.0 + ember / uEmberMax), uFull);',
   '  vec3 col = alb * (diff * sunC + amb + ember);',
-  // the sun's glint: GGX, rough on the crust, glossy on the magma, and the
-  // metals reflecting in their own colour
-  '  float rough = mix(mix(0.85, 0.3, molten), 0.45, metal);',
+  // the sun's glint: GGX, rough on the crust, glossy on the magma and a
+  // mirror on the sea, and the metals reflecting in their own colour
+  '  float rough = mix(mix(mix(0.85, 0.3, molten), 0.45, metal), 0.2, water);',
   '  vec3 H = safeNorm(uSunEye + V, n);',
   '  float NoH = max(dot(n, H), 0.0), VoH = clamp(dot(V, H), 0.0, 1.0), NoLc = max(NoL, 0.0), a2 = rough * rough * rough * rough;',
   '  float Dg = a2 / (3.14159 * pow(NoH * NoH * (a2 - 1.0) + 1.0, 2.0));',

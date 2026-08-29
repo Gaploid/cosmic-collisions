@@ -17,9 +17,13 @@ var maxPoint = 0, radPow = 0;
 var pal = new Float32Array(24);   // eight materials, this scenario's
 // the look a page asks for on top of the shared one: whether its bodies are
 // balls — round enough to take the ball's normal and silhouette — which of
-// its materials are metal, and how much surface to draw on the skin: 0 the
-// flat material, 1 the noise, 2 with craters
-var LK = { balls: false, detail: 0, metal: new Float32Array(8) };
+// its materials are metal and what surface each wears (0 bare rock, 1 a
+// cratered crust, 2 a crust with seas; a crust unless the page says), and
+// how much surface to draw on the skin: 0 the flat material, 1 the noise,
+// 2 with craters. The shader takes the two as one code: -1 metal, else the
+// surface
+var LK = { balls: false, detail: 0, metal: new Float32Array(8), surface: new Float32Array(8).fill(1), kind: new Float32Array(8) };
+var kindOf = function () { for (var i = 0; i < 8; i++) LK.kind[i] = LK.metal[i] > 0 ? -1 : LK.surface[i]; };
 var dummyHome = null;             // for a sim whose particles have no home
 var lastLights = null;
 // the picture's view of each body, eased: the report that places them
@@ -206,7 +210,7 @@ function render() {
     gl.uniformMatrix4fv(g.uProj, false, proj);
     gl.uniform1i(g.uMat, 3);
     gl.uniform1i(g.uHome, 4); gl.uniform1f(g.uHomeOn, sim.home && full && LK.detail > 0 ? 1 : 0);
-    gl.uniform1fv(g['uMetal[0]'], LK.metal);
+    gl.uniform1fv(g['uKind[0]'], LK.kind);
     gl.uniform1f(g.uRadPow, radPow);
     gl.uniform1f(g.uRad, sim.a);
     gl.uniform1f(g.uPx, px);
@@ -701,6 +705,8 @@ CC.view = {
     if (o.balls !== undefined) LK.balls = !!o.balls;
     if (o.detail !== undefined) LK.detail = o.detail;
     if (o.metal) { LK.metal.fill(0); for (var i = 0; i < o.metal.length && i < 8; i++) LK.metal[i] = o.metal[i]; }
+    if (o.surface) { LK.surface.fill(1); for (var j = 0; j < o.surface.length && j < 8; j++) LK.surface[j] = o.surface[j]; }
+    kindOf();
   },
   clampDist: function (lo, hi) { distMin = lo; distMax = hi; cam.dist = Math.max(lo, Math.min(hi, cam.dist)); },
   // the drift: a script that places the camera wants it to stay put

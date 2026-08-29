@@ -1246,7 +1246,7 @@ function buildPlanet() {
   VIEW.setPalette(PLANET_PAL);
   VIEW.setMaxPoint(0);
   VIEW.setRadPow(0);
-  VIEW.setLook({ balls: true, metal: [1, 0, 0, 0, 1, 0, 0, 0], detail: CC.dev.PHONE ? 1 : 2 });   // the giant impact's Earth, drawn the way its own page draws it
+  VIEW.setLook({ balls: true, metal: [1, 0, 0, 0, 1, 0, 0, 0], surface: [0, 0, 2, 0, 0, 0, 1, 0], detail: CC.dev.PHONE ? 1 : 2 });   // the giant impact's Earth, drawn the way its own page draws it
   VIEW.clampDist(1.5, 80);
   // the rock comes in from −x and strikes the near side of that; the camera
   // sits off that side, a little round and above, where the sun already is

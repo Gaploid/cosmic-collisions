@@ -103,6 +103,16 @@ credit.
 
 Broad strokes, newest first; the commit history tells each one in full.
 
+- **2026-08-29 — Craters and seas.** The craters were dimples on a golf
+  ball, two sizes of them; now they are craters — a flat floor, a wall up to
+  a narrow crest, an ejecta blanket, a central peak in the biggest, rays
+  off a few fresh ones — in four octaves so that there are four times as
+  many at half the size. Each material says what surface it wears (bare
+  rock, a cratered crust, a crust with seas), and Earth's crust has seas:
+  water below a level, flat and glossy with the sun's glint on it, the
+  land a tenth of the surface and dark basalt — no continents yet, a young
+  crust between magma oceans — and the seas boiled off as the crust warms.
+  0.5 ms more on the close view.
 - **2026-08-29 — The air goes.** The shell on a hit body was a neon ring:
   rock vapour puffed round a ball the analysis had drawn round the wrong
   thing — the group's density edge about its centre of mass, which an
