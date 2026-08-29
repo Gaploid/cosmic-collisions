@@ -321,6 +321,10 @@ function render() {
     // the density of what the body is made of, which may be lighter than
     // Earth's while the report's radius is at Earth's density
     var v1 = sim.R1 > 0 ? sim.R1 * sim.R1 * sim.R1 / sim.M1 : 1, v2 = sim.R2 > 0 ? sim.R2 * sim.R2 * sim.R2 / sim.M2 : v1;
+    // the easing runs by the sim's clock, not the frame's: at 4× a frame is
+    // four times the steps, and a rate set per frame would trail the body
+    // four times as far — the shell stood off the limb at speed
+    var spf = Math.max(1, (S.speed || 4) / 4), ease = function (r) { return 1 - Math.pow(1 - r, spf); }, decay = Math.pow(0.93, spf);
     bodies.forEach(function (bd, bi) {
       // the picture's view of the body, eased. The report comes every few
       // dozen frames and moves the centre of mass a little each time — as
@@ -334,6 +338,15 @@ function render() {
       // centre of mass, which the arm pulls about — carried by its drift
       var cb = bd.core || bd.com;
       var pc = [cb[0] + bd.vel[0] * lag, cb[1] + bd.vel[1] * lag, cb[2] + bd.vel[2] * lag];
+      // on the approach the bodies fly rigid on the two-body solution, and
+      // their centres are known exactly from it — the report's, carried by
+      // its velocity, misses the acceleration over the frames since, six
+      // particles' worth at 4× by the end of the flight, and the shell keyed
+      // to it stood off the limb
+      if (sim.phase === 'approach' && sim.rel && sim.M > 0) {
+        var rr = sim.rel.r, fr = bd.imp > 0.5 ? sim.M1 / sim.M : -sim.M2 / sim.M;
+        pc = [rr[0] * fr, rr[1] * fr, rr[2] * fr];
+      }
       // the radius a body's skin is drawn at: where the analysis found its
       // density fall away, plus the particle that stands on that edge; or the
       // mass at the density of what it is made of
@@ -354,9 +367,10 @@ function render() {
         else { for (var q4 = 0; q4 < 3; q4++) bs.off[q4] += bs.prev[q4] - pc[q4]; bs.rep = report; }
       }
       bs.prev = pc;
-      for (var q5 = 0; q5 < 3; q5++) { bs.off[q5] *= 0.93; bs.hot[q5] += (hoff[q5] - bs.hot[q5]) * 0.08; }
-      bs.R += (Rd - bs.R) * 0.1; bs.Ts += (bd.Tsurf - bs.Ts) * 0.08; bs.hotR += ((bd.hotR || 0) - bs.hotR) * 0.08;
-      bs.k += ((planet ? 1 : 0) - bs.k) * 0.08;
+      var e8 = ease(0.08), e10 = ease(0.1);
+      for (var q5 = 0; q5 < 3; q5++) { bs.off[q5] *= decay; bs.hot[q5] += (hoff[q5] - bs.hot[q5]) * e8; }
+      bs.R += (Rd - bs.R) * e10; bs.Ts += (bd.Tsurf - bs.Ts) * e8; bs.hotR += ((bd.hotR || 0) - bs.hotR) * e8;
+      bs.k += ((planet ? 1 : 0) - bs.k) * e8;
       // the air: a body in a giant impact whose outer fifth stands at
       // thousands of kelvin loses its share of it over the eight minutes
       // after — the shock takes that long to come round — and all of it over
@@ -465,7 +479,8 @@ function render() {
     if (sim && report) {
       if (meltSim !== sim) { meltSim = sim; meltF = [1, 0, 0, 0, 1, 0, 0, 0, 1]; meltT = sim.t; meltAxis = [0, 1, 0]; }   // a new build, not a new analysis: sim.gen ticks on every synchronous look
       if (report.axis) {
-        for (var q6 = 0; q6 < 3; q6++) meltAxis[q6] += (report.axis[q6] - meltAxis[q6]) * 0.05;
+        var e5 = 1 - Math.pow(0.95, Math.max(1, (S.speed || 4) / 4));
+        for (var q6 = 0; q6 < 3; q6++) meltAxis[q6] += (report.axis[q6] - meltAxis[q6]) * e5;
         var an = Math.hypot(meltAxis[0], meltAxis[1], meltAxis[2]) || 1; meltAxis = [meltAxis[0] / an, meltAxis[1] / an, meltAxis[2] / an];
       }
       // the turn is run up a step at a time about the axis as it is now,
@@ -528,9 +543,10 @@ function render() {
     gl.uniform2f(sp.uRes, w, h);
     gl.uniform1f(sp.uRad, sim.a); gl.uniform1f(sp.uRadPow, radPow); gl.uniform1f(sp.uPx, px);
     gl.uniform1f(sp.uSpSize, LOOK.sparkSize);
-    // the streak is the grain's own motion over the last few frames: a frame
-    // of the run is its step times the speed, or the rigid flight's own step
-    var fdt = (sim.phase === 'approach' ? 0.0025 : (sim.dt || 0)) * (S.speed || 1);
+    // the streak is the grain's own motion over the last few frames at 1× —
+    // four steps a frame, or the rigid flight's own — and not longer at 4×:
+    // a film run fast does not blur more, it only goes faster
+    var fdt = (sim.phase === 'approach' ? 0.0025 : (sim.dt || 0)) * 4;
     gl.uniform1f(sp.uStretch, fdt * LOOK.sparkTrail);
     gl.uniform1f(sp.uK, S.glow * LOOK.spark * 0.6);
     gl.uniform1f(sp.uT0, 1100);
