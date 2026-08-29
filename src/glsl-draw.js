@@ -321,7 +321,8 @@ var SHADE_FS = [
   'uniform float uFull;',       // 1 — the full look: specular, the wrap at the terminator, a cool fill; 0 — the plain one
   'uniform float uShadow;',     // 1 — the bodies shadow each other and the disk in the sun
   'uniform float uConv;',       // the convection cells on a melt, their contrast
-  'uniform mat3 uInvRot;',      // eye to world, for those cells: they are drawn in the body\'s frame, which the camera does not turn
+  'uniform mat3 uInvRot;',      // eye to world, for a patch of ground with no ball
+  'uniform mat3 uMeltRot;',     // eye to the body's own turning frame, for the melt's cells
   'uniform vec3 uEyeW;',
   'uniform float uSparkOn;',    // 1 — a loose hot grain is the spark pass to draw: its disc here keeps a quarter of its glow
   'uniform float uTime;',       // the run\'s clock, slowed, to turn them with
@@ -603,7 +604,9 @@ var SHADE_FS = [
   // the cells of a convecting melt. A churning surface has no coordinates
   // of its own — the home field jumps from grain to grain there, and the
   // surface drawn in it fades out — so its cells are drawn in the body's
-  // frame, a few grains across, and turned slowly with the run's clock:
+  // frame — one that turns with the body's spin, or the crust drawn in
+  // the grains' own coordinates slid over a magma standing still in the
+  // world — a few grains across, and drifted slowly with the run's clock:
   // the melt reads as a melt rather than as a flat glow. Past a few
   // thousand kelvin the cells give way to granulation — a photosphere's,
   // finer and quicker — and a cell's middle runs hotter than its lanes,
@@ -613,7 +616,7 @@ var SHADE_FS = [
   // which is what makes the disc a ball and not a flat glow
   '  float Tm = m.a;',
   '  if (uConv > 0.0 && molten > 0.0 && uFull > 0.5) {',
-  '    vec3 wp = uNB > 0 ? uInvRot * (p - uBall[0].xyz) : uInvRot * p + uEyeW;',
+  '    vec3 wp = uNB > 0 ? uMeltRot * (p - uBall[0].xyz) : uInvRot * p + uEyeW;',
   '    float hotK = smoothstep(5000.0, 12000.0, m.a);',
   '    float cv = fbm(wp / (7.0 * uRad) + uTime * vec3(0.31, 0.23, 0.27), 3);',
   '    float cg = fbm(wp / (2.5 * uRad) + uTime * vec3(1.1, -0.9, 0.8), 3);',

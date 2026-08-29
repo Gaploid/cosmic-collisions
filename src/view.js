@@ -32,6 +32,20 @@ var lastLights = null;
 // absorbs a report's jump, the radius, the surface temperature, the hot
 // centroid and its spread, and the atmosphere's fade. Reset with the run
 var bodySmooth = [], lightGen = -1;
+// the melt's frame: the convection cells are drawn in coordinates that turn
+// with the body — its spin axis and day from the report, the angle run up
+// with the sim's clock at 805 s a unit — or the crust, drawn in the grains'
+// own coordinates, slid over a magma that stood still in the world
+var meltF = [1, 0, 0, 0, 1, 0, 0, 0, 1], meltT = null, meltAxis = [0, 1, 0], meltSim = null;
+function axisRot(a, th) {   // column-major 3×3: the rotation by th about the unit axis a
+  var c = Math.cos(th), s = Math.sin(th), t = 1 - c, x = a[0], y = a[1], z = a[2];
+  return [t * x * x + c, t * x * y + s * z, t * x * z - s * y, t * x * y - s * z, t * y * y + c, t * y * z + s * x, t * x * z + s * y, t * y * z - s * x, t * z * z + c];
+}
+function mul3(A, B) {       // column-major 3×3 product A·B
+  var C = new Array(9);
+  for (var col = 0; col < 3; col++) for (var row = 0; row < 3; row++) { var v = 0; for (var k = 0; k < 3; k++) v += A[k * 3 + row] * B[col * 3 + k]; C[col * 3 + row] = v; }
+  return C;
+}
 var DEV = CC.dev, LOOK = CC.look, FOV = CC.FOV, glowCol = CC.glowCol, run = CC.run;
 var BLUR_PASSES = DEV.BLUR_PASSES, DPR_CAP = DEV.DPR_CAP;
 var MATH = CC.math, perspective = MATH.perspective, lookAt = MATH.lookAt, mul = MATH.mul;
@@ -447,6 +461,23 @@ function render() {
     gl.uniform1f(s.uShadow, full ? LOOK.shadows : 0);
     gl.uniform1f(s.uConv, LOOK.conv);
     gl.uniformMatrix3fv(s.uInvRot, false, invRot);
+    var meltRot = invRot;
+    if (sim && report) {
+      if (meltSim !== sim) { meltSim = sim; meltF = [1, 0, 0, 0, 1, 0, 0, 0, 1]; meltT = sim.t; meltAxis = [0, 1, 0]; }   // a new build, not a new analysis: sim.gen ticks on every synchronous look
+      if (report.axis) {
+        for (var q6 = 0; q6 < 3; q6++) meltAxis[q6] += (report.axis[q6] - meltAxis[q6]) * 0.05;
+        var an = Math.hypot(meltAxis[0], meltAxis[1], meltAxis[2]) || 1; meltAxis = [meltAxis[0] / an, meltAxis[1] / an, meltAxis[2] / an];
+      }
+      // the turn is run up a step at a time about the axis as it is now,
+      // not as one angle about the axis as it is now: an axis that leans a
+      // little with a report would have swung a whole turn's worth of
+      // pattern with it
+      var dth = report.day > 0.5 && report.day < 1e6 ? 2 * Math.PI * 805 / (3600 * report.day) * (sim.t - meltT) : 0;
+      if (dth !== 0) meltF = mul3(axisRot(meltAxis, -dth), meltF);   // the crust turns by +θ about the axis; the frame turns back
+      meltT = sim.t;
+      meltRot = mul3(meltF, invRot);
+    }
+    gl.uniformMatrix3fv(s.uMeltRot, false, meltRot);
     gl.uniform3fv(s.uEyeW, eye);
     gl.uniform1f(s.uTime, (sim.t || 0) * 0.15);
     gl.uniform1f(s.uSparkOn, full && LOOK.spark > 0 && S.sparks !== false ? 1 : 0);
@@ -694,6 +725,7 @@ CC.view = {
   },
 
   get lights() { return lastLights; },
+  get melt() { return { F: meltF.slice(), axis: meltAxis.slice() }; },   // the melt frame, for checking it rides the crust
 
   setTarget: function (t) { camTarget = t; },
   get sun() { return SUN; },   // a page that wants its subject lit has to know where the light is
