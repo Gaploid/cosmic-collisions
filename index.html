@@ -65,7 +65,7 @@
     <label>glow <input type="range" id="set-glow" min="0" max="3" step="0.1" value="1"><span id="val-glow">1.0</span></label>
     <label>shading <input type="checkbox" id="set-shade" checked><span id="val-shade">on</span></label>
     <label>stars <input type="checkbox" id="set-stars" checked><span id="val-stars">on</span></label>
-    <label>atmosphere <input type="checkbox" id="set-atm" checked><span id="val-atm">on</span></label>
+    <label>atmosphere <input type="checkbox" id="set-atm"><span id="val-atm">off</span></label>
     <label>sparks <input type="checkbox" id="set-sparks" checked><span id="val-sparks">on</span></label>
     <label>lens <input type="checkbox" id="set-lens" checked><span id="val-lens">on</span></label>
     <label>drift <input type="checkbox" id="set-drift" checked><span id="val-drift">on</span></label>
@@ -125,7 +125,7 @@ var BLUR_PASSES = DEV.BLUR_PASSES, ANALYZE_EVERY = DEV.ANALYZE_EVERY, DEFAULT_N 
 // nothing from the panel, so spin0 and spin1 live here (negative is retrograde,
 // ±0.55 is the Ćuk & Stewart 2.6-hour Earth, and maclaurin() cuts the spheroid)
 var S = { q: 0.1, angle: 45, vfac: 1.05, incl: 50, spin0: 0.18, spin1: 0.20, nIdx: DEFAULT_N, rest: 0.3, core: 0.325, dens: 0.75,
-          exposure: 1.0, glow: 1.0, shade: true, stars: true, atm: true, sparks: true, lens: true, drift: true, follow: false, speed: 4, preset: 'theia' };
+          exposure: 1.0, glow: 1.0, shade: true, stars: true, atm: false, sparks: true, lens: true, drift: true, follow: false, speed: 4, preset: 'theia' };   // the atmosphere is off until asked for: at speed the shell trails the body
 var COL_TARGET = [0.40, 0.58, 0.90], COL_IMPACTOR = [0.96, 0.55, 0.28];
 // the palette, by w = layer + 4·body: core, mantle, crust for the target, then
 // the same three for the impactor — its core gold against Earth's silver
@@ -349,7 +349,7 @@ function syncSliders() {
   $('set-glow').value = S.glow; $('val-glow').textContent = S.glow.toFixed(1);
   $('val-shade').textContent = S.shade ? 'on' : 'off';
   $('val-stars').textContent = S.stars ? 'on' : 'off';
-  $('val-atm').textContent = S.atm ? 'on' : 'off';
+  $('set-atm').checked = !!S.atm; $('val-atm').textContent = S.atm ? 'on' : 'off';
   $('val-sparks').textContent = S.sparks ? 'on' : 'off';
   $('val-lens').textContent = S.lens ? 'on' : 'off';
   $('val-drift').textContent = S.drift ? 'on' : 'off';

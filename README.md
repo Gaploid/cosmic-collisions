@@ -104,8 +104,9 @@ impostors, a bilateral blur that melts them into a skin, a coverage cut that
 takes the beads off the limb — with a surface drawn in each grain's own
 coordinates so it rides the material, and hot rock glowing by its temperature
 and lighting everything else. Over that, the cinema: an atmosphere on each
-body, integrated along the ray through a shell keyed to the skin's own
-silhouette — the steam a young planet wears, until the giant impact blows it
+body — off until the panel switches it on, since at speed the shell trails
+the body — integrated along the ray through a shell keyed to the skin's own
+silhouette, the steam a young planet wears until the giant impact blows it
 off; the loose hot grains drawn once more as comets, streaked by their own
 motion; the bodies' sun shadows on the disk and on each other; convection
 cells on the melt; and a lens — the sun's glare walked past the bodies into
