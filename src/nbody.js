@@ -170,9 +170,14 @@ function build(opt) {
   var vD = Math.sqrt(Math.max(vc * vc - 2 * M * (1 / Rsum - 1 / D), 0.04));
   var bD = Math.min(bc * vc / vD, D * 0.95);
   var xD = -Math.sqrt(D * D - bD * bD);
-  var c1 = [-xD * M2 / M, 0, -bD * M2 / M];           // barycentre at the origin
-  var c2 = [xD + c1[0], 0, bD + c1[2]];
-  var rel = { r: [xD, 0, bD], v: [vD, 0, 0] };         // impactor relative to target
+  // the impactor comes in from above the orbital plane by incl: the impact
+  // parameter stands out of the plane the bodies spin in, so the
+  // encounter's angular momentum is tilted from the spins' and the merged
+  // planet's axis leans with it — the obliquity a giant impact leaves
+  var inc = (opt.incl || 0) * Math.PI / 180, bY = bD * Math.sin(inc), bZ = bD * Math.cos(inc);
+  var c1 = [-xD * M2 / M, -bY * M2 / M, -bZ * M2 / M];   // barycentre at the origin
+  var c2 = [xD + c1[0], bY + c1[1], bZ + c1[2]];
+  var rel = { r: [xD, bY, bZ], v: [vD, 0, 0] };          // impactor relative to target
   var bulk0 = [0, 0, 0], bulk1 = [0, 0, 0];
   var i, o;
   for (i = 0; i < n1; i++) { o = i * 4; pos[o] = b1[i * 3] + c1[0]; pos[o + 1] = b1[i * 3 + 1] + c1[1]; pos[o + 2] = b1[i * 3 + 2] + c1[2]; pos[o + 3] = lay[i]; }
@@ -699,18 +704,35 @@ function fof(N, mref, a, P, V, R, D, spring, touch, cap, sort) {
   }
   var A = stats(g1), B = g2 >= 0 ? stats(g2) : null;
   // the planet's spin: angular momentum about its centre over the moment of
-  // inertia about that axis — the length of its day
-  var Lx = 0, Ly = 0, Lz = 0, I = 0, m, dx0, dy0, dz0;
+  // inertia about that axis — the length of its day — taken over the body
+  // proper, what lies within 1.15 of its own radius of its core, about the
+  // mean motion of that. The arm's and the disk's share of the group's
+  // momentum and inertia is not the planet's, and with it counted the day
+  // read nine hours one look and five the next, and the axis leaned ten
+  // degrees more, as the arm was counted in and out of the group
+  var rb2 = Math.pow(1.15 * Math.cbrt(Math.max(A.impMass, A.mass - A.impMass)), 2), cx0 = A.core[0], cy0 = A.core[1], cz0 = A.core[2];
+  var bm = 0, bvx = 0, bvy = 0, bvz = 0, m, dx0, dy0, dz0;
   for (i = 0; i < N; i++) if (find(i) === g1) {
+    dx0 = P[i * 4] - cx0; dy0 = P[i * 4 + 1] - cy0; dz0 = P[i * 4 + 2] - cz0;
+    if (dx0 * dx0 + dy0 * dy0 + dz0 * dz0 > rb2) continue;
+    m = mref * R[i]; bm += m; bvx += m * V[i * 4]; bvy += m * V[i * 4 + 1]; bvz += m * V[i * 4 + 2];
+  }
+  if (bm > 0) { bvx /= bm; bvy /= bm; bvz /= bm; }
+  var Lx = 0, Ly = 0, Lz = 0, I = 0;
+  for (i = 0; i < N; i++) if (find(i) === g1) {
+    dx0 = P[i * 4] - cx0; dy0 = P[i * 4 + 1] - cy0; dz0 = P[i * 4 + 2] - cz0;
+    if (dx0 * dx0 + dy0 * dy0 + dz0 * dz0 > rb2) continue;
     m = mref * R[i];
-    dx0 = P[i * 4] - A.com[0]; dy0 = P[i * 4 + 1] - A.com[1]; dz0 = P[i * 4 + 2] - A.com[2];
-    var ux = V[i * 4] - A.vel[0], uy = V[i * 4 + 1] - A.vel[1], uz = V[i * 4 + 2] - A.vel[2];
+    var ux = V[i * 4] - bvx, uy = V[i * 4 + 1] - bvy, uz = V[i * 4 + 2] - bvz;
     Lx += m * (dy0 * uz - dz0 * uy); Ly += m * (dz0 * ux - dx0 * uz); Lz += m * (dx0 * uy - dy0 * ux);
   }
   var Lm = Math.sqrt(Lx * Lx + Ly * Ly + Lz * Lz), lx = Lx / (Lm + 1e-30), ly = Ly / (Lm + 1e-30), lz = Lz / (Lm + 1e-30);
+  // and the tilt of that axis from the orbital one, y — the obliquity
+  var tilt = Math.acos(Math.max(-1, Math.min(1, ly))) * 180 / Math.PI;
   for (i = 0; i < N; i++) if (find(i) === g1) {
+    dx0 = P[i * 4] - cx0; dy0 = P[i * 4 + 1] - cy0; dz0 = P[i * 4 + 2] - cz0;
+    if (dx0 * dx0 + dy0 * dy0 + dz0 * dz0 > rb2) continue;
     m = mref * R[i];
-    dx0 = P[i * 4] - A.com[0]; dy0 = P[i * 4 + 1] - A.com[1]; dz0 = P[i * 4 + 2] - A.com[2];
     var along = dx0 * lx + dy0 * ly + dz0 * lz;
     I += m * (dx0 * dx0 + dy0 * dy0 + dz0 * dz0 - along * along);
   }
@@ -799,7 +821,7 @@ function fof(N, mref, a, P, V, R, D, spring, touch, cap, sort) {
     for (i = 0; i < N; i++) { var dst = bins[keys[i]]++; perm[dst] = i; into[i] = dst; }
     for (i = 0; i < list.length; i++) list[i] = into[list[i]];
   }
-  return { largest: A.mass, largestImp: A.imp, largestIron: A.iron, day: day, orbit: orbit, escape: esc, second: second, com: A.com, core: A.core, vel: A.vel, R: A.R, Redge: A.Redge, Tsurf: A.Tsurf, hotCom: A.hotCom, hotR: A.hotR,
+  return { largest: A.mass, largestImp: A.imp, largestIron: A.iron, day: day, tilt: tilt, axis: [lx, ly, lz], orbit: orbit, escape: esc, second: second, com: A.com, core: A.core, vel: A.vel, R: A.R, Redge: A.Redge, Tsurf: A.Tsurf, hotCom: A.hotCom, hotR: A.hotR,
            impMass: A.impMass, impCom: A.impCom, impRms: A.impRms,
            M: Mt, drift: Math.sqrt(px * px + py * py + pz * pz) / Mt, L: Math.sqrt(Jx * Jx + Jy * Jy + Jz * Jz),
            KE: ke, PE: pe, EL: elastic, Q: Q, unseated: unseated / N, full: full / N,

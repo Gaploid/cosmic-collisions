@@ -103,6 +103,21 @@ credit.
 
 Broad strokes, newest first; the commit history tells each one in full.
 
+- **2026-08-29 — The tilt.** Both bodies spun about the orbital axis and
+  the impact lay in the orbital plane, so the merged planet's axis had
+  nowhere to turn. Now the impactor can come in from above the plane —
+  `from above °` in the panel, 50° on the theia preset — and the readout
+  says where the axis ends up: 0° on the approach, 18° an hour after
+  contact and 23° by three, as the arm takes its share of the momentum
+  away — which is the tilt Earth has. The day goes 7.8 → 5.1 h either
+  way. The day and the axis are now the planet's own — what lies within
+  its radius of its core — where they were the group's: with the arm
+  counted in and out the day read nine hours one look and five the next.
+  And the melt's cells turn with the body — they were drawn in the
+  world's frame, so the crust, drawn in the grains' own coordinates,
+  slid over a magma that stood still; the frame is run up a step at a
+  time about the axis, so a report that leans the axis does not swing
+  the pattern.
 - **2026-08-29 — The melt.** A magma ocean was a flat yellow disc: its
   convection cells faded on a coherent surface and went out past 6000 K.
   Now the cells run over the whole melt, give way to a photosphere's

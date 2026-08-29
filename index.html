@@ -54,6 +54,7 @@
   <div id="adv-panel" hidden>
     <label>impactor M⊕ <input type="range" id="set-q" min="0.02" max="1" step="0.01" value="0.1"><span id="val-q">0.10</span></label>
     <label>angle ° <input type="range" id="set-angle" min="0" max="85" step="1" value="45"><span id="val-angle">45</span></label>
+    <label>from above ° <input type="range" id="set-incl" min="0" max="60" step="1" value="50"><span id="val-incl">50</span></label>
     <label>speed v.esc <input type="range" id="set-vfac" min="0.8" max="3" step="0.05" value="1.05"><span id="val-vfac">1.05</span></label>
     <label>bodies <input type="range" id="set-n" min="0" max="4" step="1" value="3"><span id="val-n">131k</span></label>
     <label>bounce <input type="range" id="set-rest" min="0.05" max="0.9" step="0.05" value="0.3"><span id="val-rest">0.30</span></label>
@@ -104,11 +105,11 @@ var canvas = boot.canvas, gl = boot.gl, floatBlend = boot.floatBlend;
 var T_UNIT = CC.nbody.T_UNIT, V_UNIT = CC.nbody.V_UNIT, E_KG = CC.nbody.E_KG, CP_ROCK = CC.nbody.CP_ROCK, L_EM = CC.nbody.L_EM;
 var N_CHOICES = CC.N_CHOICES, N_LABELS = CC.N_LABELS;
 var PRESETS = {
-  theia:   { q: 0.10, angle: 45, vfac: 1.05, dist: 10.5, label: 'theia' },     // the canonical Moon-forming impact
-  headon:  { q: 0.10, angle: 0,  vfac: 1.00, dist: 8,   label: 'head-on' },
-  hitrun:  { q: 0.25, angle: 65, vfac: 1.60, dist: 10,  label: 'hit & run' },  // grazing and fast: the impactor survives
-  twins:   { q: 1.00, angle: 45, vfac: 1.10, dist: 9,   label: 'twins' },
-  shatter: { q: 0.50, angle: 20, vfac: 2.60, dist: 18,  label: 'shatter' }
+  theia:   { q: 0.10, angle: 45, vfac: 1.05, incl: 50, dist: 10.5, label: 'theia' },     // the canonical Moon-forming impact, from 50° above the plane: the tilt it leaves Earth is 23°
+  headon:  { q: 0.10, angle: 0,  vfac: 1.00, incl: 0,  dist: 8,   label: 'head-on' },
+  hitrun:  { q: 0.25, angle: 65, vfac: 1.60, incl: 0,  dist: 10,  label: 'hit & run' },  // grazing and fast: the impactor survives
+  twins:   { q: 1.00, angle: 45, vfac: 1.10, incl: 0,  dist: 9,   label: 'twins' },
+  shatter: { q: 0.50, angle: 20, vfac: 2.60, incl: 0,  dist: 18,  label: 'shatter' }
 };
 // ---------- what the device is ----------
 // src/shell.js works out what it is looking at; this page takes the numbers
@@ -123,7 +124,7 @@ var BLUR_PASSES = DEV.BLUR_PASSES, ANALYZE_EVERY = DEV.ANALYZE_EVERY, DEFAULT_N 
 // density, and it had a slider once; nobody needs to turn Earth's day down to
 // nothing from the panel, so spin0 and spin1 live here (negative is retrograde,
 // ±0.55 is the Ćuk & Stewart 2.6-hour Earth, and maclaurin() cuts the spheroid)
-var S = { q: 0.1, angle: 45, vfac: 1.05, spin0: 0.18, spin1: 0.20, nIdx: DEFAULT_N, rest: 0.3, core: 0.325, dens: 0.75,
+var S = { q: 0.1, angle: 45, vfac: 1.05, incl: 50, spin0: 0.18, spin1: 0.20, nIdx: DEFAULT_N, rest: 0.3, core: 0.325, dens: 0.75,
           exposure: 1.0, glow: 1.0, shade: true, stars: true, atm: true, sparks: true, lens: true, drift: true, follow: false, speed: 4, preset: 'theia' };
 var COL_TARGET = [0.40, 0.58, 0.90], COL_IMPACTOR = [0.96, 0.55, 0.28];
 // the palette, by w = layer + 4·body: core, mantle, crust for the target, then
@@ -196,7 +197,7 @@ var stepAcc = 0;
 
 // ---------- building a run ----------
 function build() {
-  NB.build({ nIdx: S.nIdx, q: S.q, dens: S.dens, core: S.core, spin0: S.spin0, spin1: S.spin1, angle: S.angle, vfac: S.vfac, rest: S.rest });
+  NB.build({ nIdx: S.nIdx, q: S.q, dens: S.dens, core: S.core, spin0: S.spin0, spin1: S.spin1, angle: S.angle, incl: S.incl, vfac: S.vfac, rest: S.rest });
   stepAcc = 0; CC.run.paused = false;
   $('btn-pause').classList.remove('paused');
   $('hud-report').hidden = true; lastReport = '';
@@ -272,7 +273,7 @@ function hud() {
       // impactor's share of every piece and the books belong to the wide
       // screen that has the room to argue.
       showReport(rep, [
-        ['largest', fmtMass(report.largest), pct(report.largestIron) + ' iron' + (report.day < 200 ? ' \u00b7 day ' + report.day.toFixed(1) + ' h' : '')],
+        ['largest', fmtMass(report.largest), pct(report.largestIron) + ' iron' + (report.day < 200 ? ' \u00b7 day ' + report.day.toFixed(1) + ' h \u00b7 tilt ' + report.tilt.toFixed(0) + '\u00b0' : '')],
         ['orbit', fmtMass(report.orbit), '\u2192 moon ' + (report.moon / 0.0123).toFixed(2) + ' M\u263e'],
         ['escaping', fmtMass(report.escape), ''],
         ['2nd body', sec ? fmtMass(sec.mass) : dash, sec ? sec.dist.toFixed(1) + ' R\u2295 \u00b7 ' + (sec.bound ? 'bound' : 'unbound') : '']
@@ -285,7 +286,7 @@ function hud() {
     var ref = sim.ref, E = report.KE + report.PE + report.EL;
     var sgn = function (x, d) { var s = Math.abs(x).toFixed(d); return (parseFloat(s) === 0 ? '' : x < 0 ? '\u2212' : '+') + s; };
     showReport(rep, [
-      ['largest', fmtMass(report.largest), pct(report.largestIron) + ' iron \u00b7 ' + pct(report.largestImp) + ' impactor' + (report.day < 200 ? ' \u00b7 day ' + report.day.toFixed(1) + ' h' : '')],
+      ['largest', fmtMass(report.largest), pct(report.largestIron) + ' iron \u00b7 ' + pct(report.largestImp) + ' impactor' + (report.day < 200 ? ' \u00b7 day ' + report.day.toFixed(1) + ' h \u00b7 tilt ' + report.tilt.toFixed(0) + '\u00b0' : '')],
       ['in orbit', fmtMass(report.orbit), report.orbit > 0.0005 ? 'j ' + report.jD.toFixed(2) : ''],
       ['moon', (report.moon / 0.0123).toFixed(2) + ' M\u263e', ''],
       ['escaping', fmtMass(report.escape), ''],
@@ -332,6 +333,7 @@ function setOn(container, attr, value) {
 function syncSliders() {
   $('set-q').value = S.q; $('val-q').textContent = S.q.toFixed(2);
   $('set-angle').value = S.angle; $('val-angle').textContent = S.angle;
+  $('set-incl').value = S.incl; $('val-incl').textContent = S.incl;
   $('set-vfac').value = S.vfac; $('val-vfac').textContent = S.vfac.toFixed(2);
   $('set-n').value = S.nIdx; $('val-n').textContent = N_LABELS[S.nIdx];
   $('set-rest').value = S.rest; $('val-rest').textContent = S.rest.toFixed(2);
@@ -350,7 +352,7 @@ $('hud-preset').addEventListener('click', function (e) {
   var b = e.target.closest('button[data-preset]');
   if (!b) return;
   var p = PRESETS[b.getAttribute('data-preset')];
-  S.preset = b.getAttribute('data-preset'); S.q = p.q; S.angle = p.angle; S.vfac = p.vfac;
+  S.preset = b.getAttribute('data-preset'); S.q = p.q; S.angle = p.angle; S.incl = p.incl || 0; S.vfac = p.vfac;
   cam.dist = p.dist;
   setOn($('hud-preset'), 'data-preset', S.preset);
   syncSliders();
@@ -408,6 +410,7 @@ function onRange(id, live, apply, keepPreset) {
 }
 onRange('set-q', null, function (v) { S.q = v; });
 onRange('set-angle', null, function (v) { S.angle = v; });
+onRange('set-incl', null, function (v) { S.incl = v; });
 onRange('set-vfac', null, function (v) { S.vfac = v; });
 onRange('set-n', null, function (v) { S.nIdx = v | 0; }, true);
 onRange('set-rest', null, function (v) { S.rest = v; }, true);
