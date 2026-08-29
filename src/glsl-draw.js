@@ -604,18 +604,30 @@ var SHADE_FS = [
   // of its own — the home field jumps from grain to grain there, and the
   // surface drawn in it fades out — so its cells are drawn in the body's
   // frame, a few grains across, and turned slowly with the run's clock:
-  // the melt reads as a melt rather than as a flat glow
+  // the melt reads as a melt rather than as a flat glow. Past a few
+  // thousand kelvin the cells give way to granulation — a photosphere's,
+  // finer and quicker — and a cell's middle runs hotter than its lanes,
+  // so the colour goes with the brightness: whiter in the upwelling,
+  // redder between. And the melt darkens toward its limb, as any glowing
+  // ball does — the light leaves it slantwise through more of itself —
+  // which is what makes the disc a ball and not a flat glow
+  '  float Tm = m.a;',
   '  if (uConv > 0.0 && molten > 0.0 && uFull > 0.5) {',
   '    vec3 wp = uNB > 0 ? uInvRot * (p - uBall[0].xyz) : uInvRot * p + uEyeW;',
+  '    float hotK = smoothstep(5000.0, 12000.0, m.a);',
   '    float cv = fbm(wp / (7.0 * uRad) + uTime * vec3(0.31, 0.23, 0.27), 3);',
-  '    float cw = molten * (1.0 - 0.6 * coh) * uConv * (1.0 - smoothstep(6000.0, 16000.0, m.a));',
+  '    float cg = fbm(wp / (2.5 * uRad) + uTime * vec3(1.1, -0.9, 0.8), 3);',
+  '    cv = mix(cv, cg, hotK);',
+  '    float cw = molten * (1.0 - 0.3 * coh) * uConv;',
   '    em *= mix(1.0, clamp(0.6 + 1.4 * (cv + 0.35), 0.2, 2.0), cw);',
+  '    Tm *= 1.0 + 0.12 * cv * cw;',
   '  }',
+  '  em *= mix(1.0, 0.45 + 0.55 * NoV, molten * (0.5 + 0.5 * coh) * uFull);',
   // a grain on its own, hot, is drawn as a comet by the spark pass — a
   // soft core in place of this disc's hard-edged square — so the disc keeps
   // a quarter of its glow and hands the rest over
   '  em *= mix(1.0, 0.25, uSparkOn * (1.0 - smoothstep(1.5, 3.0, floor(d.g))) * smoothstep(900.0, 1300.0, m.a));',
-  '  vec3 emis = glow(m.a) * uGlow * em;',
+  '  vec3 emis = glow(Tm) * uGlow * em;',
   '  gl_FragDepth = ((uP22 * (-z) + uP32) / z) * 0.5 + 0.5;',
   '  if (uDbg > 0.5) { vec3 lh0 = normalize(uLPos[0] - p); o = vec4(uDbg < 1.5 ? ember : uDbg < 2.5 ? nR * 0.5 + 0.5 : uDbg < 3.5 ? lh0 * 0.5 + 0.5 : uDbg < 4.5 ? n * 0.5 + 0.5 : uDbg < 5.5 ? fract(hm.xyz) : vec3(tone), 1.0); return; }',
   '  o = vec4(col + emis, alpha);',

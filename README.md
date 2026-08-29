@@ -103,6 +103,12 @@ credit.
 
 Broad strokes, newest first; the commit history tells each one in full.
 
+- **2026-08-29 — The melt.** A magma ocean was a flat yellow disc: its
+  convection cells faded on a coherent surface and went out past 6000 K.
+  Now the cells run over the whole melt, give way to a photosphere's
+  granulation where it is hotter, run whiter in the upwelling and redder
+  in the lanes, and the melt darkens toward its limb as any glowing ball
+  does — so the disc is a ball.
 - **2026-08-29 — Tone and grain.** The surfaces were clay: one matte tone
   shaded softly. Now the highlands stand paler and the lowlands deeper, a
   cratered crust wears maria — the low plains its old lava flooded, dark,
