@@ -103,205 +103,50 @@ credit.
 
 Broad strokes, newest first; the commit history tells each one in full.
 
-- **2026-08-29 — Whole from the first frame.** The loader lifted and the
-  shell came half a second after it, with the worker's first report. The
-  settle's last frame now takes the first look itself, synchronously, so
-  the first frame out from under the loader has the shell and the light on
-  it.
-- **2026-08-29 — Keeping up at 4×.** A frame at 4× is sixteen steps, and
-  the picture's easing ran per frame: the ball trailed the body four times
-  as far, and on the approach the report — a dozen frames old and carried
-  by its velocity — missed the flight's acceleration by six particles,
-  so the shell stood off the limb. The easing now runs by the sim's clock,
-  the approach takes its centres from the two-body solution it flies on,
-  and the sparks' streaks are a 1× frame of motion at any speed — a film
-  run fast does not blur more.
-- **2026-08-29 — The tilt.** Both bodies spun about the orbital axis and
-  the impact lay in the orbital plane, so the merged planet's axis had
-  nowhere to turn. Now the impactor can come in from above the plane —
-  `from above °` in the panel, 50° on the theia preset — and the readout
-  says where the axis ends up: 0° on the approach, 18° an hour after
-  contact and 23° by three, as the arm takes its share of the momentum
-  away — which is the tilt Earth has. The day goes 7.8 → 5.1 h either
-  way. The day and the axis are now the planet's own — what lies within
-  its radius of its core — where they were the group's: with the arm
-  counted in and out the day read nine hours one look and five the next.
-  And the melt's cells turn with the body — they were drawn in the
-  world's frame, so the crust, drawn in the grains' own coordinates,
-  slid over a magma that stood still; the frame is run up a step at a
-  time about the axis, so a report that leans the axis does not swing
-  the pattern.
-- **2026-08-29 — The melt.** A magma ocean was a flat yellow disc: its
-  convection cells faded on a coherent surface and went out past 6000 K.
-  Now the cells run over the whole melt, give way to a photosphere's
-  granulation where it is hotter, run whiter in the upwelling and redder
-  in the lanes, and the melt darkens toward its limb as any glowing ball
-  does — so the disc is a ball.
-- **2026-08-29 — Tone and grain.** The surfaces were clay: one matte tone
-  shaded softly. Now the highlands stand paler and the lowlands deeper, a
-  cratered crust wears maria — the low plains its old lava flooded, dark,
-  smooth and with fewer craters, being younger — and the regolith has a
-  grain, a speckle that fades out as its period nears a pixel so the far
-  view does not crawl. 0.2 ms more on the close view.
-- **2026-08-29 — Craters and seas.** The craters were dimples on a golf
-  ball, two sizes of them; now they are craters — a flat floor, a wall up to
-  a narrow crest, an ejecta blanket, a central peak in the biggest, rays
-  off a few fresh ones — in four octaves so that there are four times as
-  many at half the size. Each material says what surface it wears (bare
-  rock, a cratered crust, a crust with seas), and Earth's crust has seas:
-  water below a level, flat and glossy with the sun's glint on it, the
-  land a tenth of the surface and dark basalt — no continents yet, a young
-  crust between magma oceans — and the seas boiled off as the crust warms.
-  0.5 ms more on the close view.
-- **2026-08-29 — The air goes.** The shell on a hit body was a neon ring:
-  rock vapour puffed round a ball the analysis had drawn round the wrong
-  thing — the group's density edge about its centre of mass, which an
-  attached impactor or a curtain of ejecta pulls most of a radius off. Now the
-  analysis finds a body's centre from the material it is mostly made of
-  and its edge about that centre, and the atmosphere does what a giant
-  impact does to one: over the eight minutes after contact loses the share
-  the ground motion throws off — Schlichting, Sari & Yalinewich's
-  0.4x + 1.4x² − 0.8x³ of x = (v/v_esc)(m/M): a tenth for Theia, a third
-  for a hit & run, all of it for twins and the shatter — and every bit of
-  it over the hot ground; none of it comes back.
-- **2026-08-29 — The air of that world.** The blue limb was today's sky, and
-  today's sky is nitrogen and two billion years of oxygen away from the
-  giant impact: a proto-Earth wears the steam its magma ocean boils off —
-  water and carbon dioxide at tens to hundreds of bars, white with cloud
-  rather than blue with Rayleigh. Theia has one now too, since a Mars-sized
-  body degasses one and holds it: a lighter planet keeps a shorter column
-  and keeps it further out, so hers is half as bright and twice as tall.
-- **2026-08-28 — The cinema.** The picture was correct and flat: balls with
-  no air round them, ejecta as confetti, a melt as one yellow. Now the
-  bodies wear an atmosphere — thin and blue while cold, a glowing vapour
-  over the heat once hit — the loose hot grains fly as comets with tails,
-  the planet shadows its disk, the melt convects, and the film has a lens:
-  light shafts off a hidden sun, streak, ghosts, shimmer, aberration and
-  grain, with thirty thousand faint stars behind the catalogue and a camera
-  that drifts until it is touched. The picture keys the ball, the light and
-  the shell to a body's own core rather than its group's centre of mass,
-  which the arm pulled a seventh of a radius off, and eases each report's
-  jump. All of it for 0.3 ms a frame.
-- **2026-08-28 — The Moon stays.** The Moon the theia run makes — 1.3 M☾ at
-  3.5–5 R⊕, outside the Roche limit, where the real one formed — came apart
-  after a hundred hours: the mesh's far field pushed the system 18 m/s, a
-  radius in that time, and the orbit reached the edge of the box, where the
-  pairwise pass subtracted a mesh force that was not there; and the contact
-  grid's wrap laid the moon's cells over the planet's limb once an orbit,
-  filling them past their seats. The far field is summed block to block with
-  the tidal tensor now, a pair with a side off the mesh gets the whole of
-  Newton, and the wrap's images are skewed off the plane: at 100 h the drift is
-  0.7 m/s and the Moon is at a = 4.6 R⊕, e = 0.12.
-- **2026-08-28 — Zero at first touch.** The clock counted from the start line,
-  so the bodies met at T+ 1h. It counts down to contact now — the rigid
-  flight is run once at build to learn how long it takes — and up from
-  there, as Chicxulub's does.
-- **2026-08-28 — Twice the step.** A step at 131k from 2.1 ms to 1.1 in
-  sequence, at 262k from 3.7 to 1.9; 4× runs at 41–48 fps where it ran at
-  19–25, and 2× at 262k at 50 where it ran at 26. The contact cells' eight seat
-  textures became two, each seat carrying where its particle sat so most
-  candidates are let go unfetched; the pairwise pass's tables moved from
-  uniform arrays, which serve a divergent index one thread at a time, into a
-  texture, and its sum into four slices; the mesh deposit takes the particles
-  in a scrambled order, so the ROP is not fed a cell's blends in a row. The
-  seats come out the same to the bit; the deposit sums in another order, which
-  moves the books at the fifth digit.
-- **2026-08-28 — The light on the second body.** A hot body's light shaded
-  the skin by each grain's own normal, so a lit face came out as a honeycomb of
-  crescents that slid over it as the camera turned; it goes by the smoothed
-  skin's normal now, the grain's only along a silhouette. And a grain that
-  fell back onto a skin is drawn as part of that skin rather than as a raw ball
-  on it, whose pixel-snapped edge the blur smeared into streaks that flickered.
-- **2026-08-28 — A longer run-up, and a loading line.** The bodies set off
-  3.7 R⊕ short of contact instead of 2.4, so the approach runs some seven
-  seconds at 1× where it was under five — long enough to see who is coming from
-  where. And the page says what it is doing while the thread is away: a line
-  mid-screen, building or settling, gone when the approach begins.
-- **2026-08-27 — A surface.** The planet was a blue ball with the lumps the
-  impostors left in it; it wears a surface now, textured in the coordinates each
-  grain carries from where it sat in its body, so the relief turns with the
-  body, stretches with the arm and goes out with the ejecta. A round body's skin
-  leans on the ball it is, which took the torn limb off the close view, and the
-  bodies light each other by the inverse square — for 0.8 ms more at the default
-  view and 2.4 close in, on an RTX 4070.
-- **2026-08-27 — The planet.** Asked for the Earth to be breakable, and it is:
-  the engine that runs Theia moved into `src/nbody.js`, and Chicxulub's page got
-  a third view that builds Earth out of it and throws a rock. The honest part is
-  the rock's size — a 14 km stone is a six-thousandth of one grain, so it is
-  drawn as the one grain it is worth, does nothing, and the readout says so.
-- **2026-08-27 — The first day.** The crater is the small half of Chicxulub;
-  the other half is what came out of it, and that is a whole-planet story. So
-  the scenario has a second view — Earth as a shell of frozen particles drawn as
-  a globe, and fifty thousand tracers carrying the plume over the horizon inside
-  a quarter of an hour and back down everywhere within two.
-- **2026-08-27 — Chicxulub.** The other end of the scale from a planet: an
-  asteroid six thousand times lighter than one particle of the giant impact,
-  hitting ground that is a patch rather than a world — constant gravity, seconds
-  instead of hours, a box cut to the crater. The impactor is carried in rigid
-  and consumed at contact, handing the ground an excavation flow; everything
-  after is the sim's own, and the engine they now share moved to `src/`.
-- **2026-08-27 — A readout that holds still.** The report was a stack of
-  sentences whose rows appeared and vanished with the run, so following one
-  figure meant finding it again each time. It is a table now — every row always
-  present, name, number and note each in a column of its own, the numbers
-  right-aligned on their decimal points, the box a fixed width.
-- **2026-08-27 — The phone's own readout.** A phone has no room for an audit:
-  the report gives the outcome and the provenance of that figure, and the books
-  stay on the wide screen that has the room to argue. The clock and the run's
-  numbers share one line across the foot, and the corner carries a link to the
-  source.
-- **2026-08-26 — A phone can hold this.** The run was built for a desk; a phone
-  takes the same collision at a quarter of the particles — 33k still splashes,
-  still throws a disk, still gathers a moon — and the picture falls to 85 % and
-  then 72 % of a side if the frames stop coming. The canvas and the readouts sit
-  inside the notch and the home bar, and follow moved onto the `f` key.
-- **2026-08-26 — A shorter panel.** The advanced panel lost its two spin
-  sliders — a spin is a property of the rock, like its density — and says the
-  rest in fewer words, with a rule marking where the settings that restart the
-  run end.
-- **2026-08-26 — Skin.** The bodies are built as onions of Fibonacci shells
-  instead of a lattice cut to a sphere, so the concentric rings the crust wore
-  are gone, and the pile is relaxed before it settles so that nothing pops out
-  of the surface. The skin's silhouette is cut and feathered by a coverage
-  field, which takes the staircase of lit discs off the limb.
-- **2026-08-26 — The film.** An ACES-style tone curve — deeper shadows, a clean
-  roll-off at the hottest — the sun as a disk with a glare that the bodies
-  occlude, a light vignette, and FXAA. The knobs live in `__impact.look`.
-- **2026-08-26 — Lit by the magma.** The planet and the second body light what
-  is near them with the glow of their own surface: the arm and the disk get
-  their planet-facing sides in orange, a moonlet is lit from below, the planet's
-  cold far side stays dark, and the bodies shadow each other as balls.
-- **2026-08-26 — Heat.** The heat the contacts make stays in the material and
-  spreads by contact; every particle has a temperature and the rock glows by
-  it — a magma ocean at 3000 K a day after the canonical impact, the far side
-  cold. On the way: the books were booking a barely-loaded contact's spring work
-  as heat with either sign, and the balance goes from −2.8 % to under a percent.
-- **2026-08-26 — Faster.** A step at 131k from 2.5 ms to 1.4, and 4× runs at
-  30 fps instead of 19: empty mesh blocks skipped, the mesh every eighth step,
-  the particles in spatial order, the analysis read back without waiting, the
-  spring let go after the splash. And the mesh deposit was losing 2 % of the
-  mass to half-float rounding; it blends in full floats now.
-- **2026-08-26 — Dust, gone.** The points that rode on the particles never read
-  as anything but noise; the skin is the body.
-- **2026-08-26 — The disk binds.** Moonlets came apart into puffs, a cell of the
-  gravity mesh being five particles wide and a moonlet a cell or two. The loose
-  material now gets its gravity corrected pairwise, P³M-style, the disk collects
-  into moonlets that stay, and a moon line says what Moon it would make.
-- **2026-08-26 — The books.** The readout keeps momentum, angular momentum and
-  energy, and they caught the gravity mesh braking a spinning planet by lagging
-  four steps behind it. The mesh now pulls as one impulse where it is measured,
-  and cell on cell at centres of mass, and L holds to 0.01 %.
-- **2026-08-26 — Spin.** Both bodies arrive turning about their axes, with
-  eight-hour days by default and sliders from none to a 2.6-hour Earth, each cut
-  beforehand as the Maclaurin spheroid its spin calls for.
-- **2026-08-25 — Cores.** Both bodies get an iron core, a mantle and a crust,
-  with density as mass; the readout says what each piece is made of and how long
-  the planet's day is.
-- **2026-08-25 — A brighter sky.** The page gets the same real catalogue sky the
-  main animation has, instead of a hash.
-- **2026-08-25 — Impact.** Two planets of real mass collide under their own
-  gravity, on the GPU, from the canonical Moon-forming impact to a hit-and-run.
-  A readout says what stays, what orbits, and what escapes.
+- **2026-08-29 — Surfaces and the melt.** The craters are craters now — a
+  floor, a narrow crest, an ejecta blanket, a central peak in the biggest,
+  rays off a few fresh ones — in four octaves so that there are four times
+  as many at half the size; Earth's crust wears an early ocean over basalt
+  islands, with the sun's glint on it, and a cratered crust wears dark maria
+  and a regolith grain. The magma ocean convects over its whole face, goes
+  to a photosphere's granulation where it is hottest, darkens to its limb,
+  and turns with the body it sits on.
+- **2026-08-29 — The air, the axis, and keeping up.** The atmosphere is keyed
+  to a body's own centre and edge, and a giant impact takes the share of it
+  the ground motion throws off — a tenth for Theia, a third for a hit & run,
+  all of it for twins and the shatter — with a hole over the impact. Theia
+  comes in from above the orbital plane and leaves Earth a 23° tilt, and the
+  day and the axis on the readout are the planet's own rather than its
+  group's. The picture keeps up at 4× and is whole from the first frame out
+  from under the loader.
+- **2026-08-28 — The cinema, and the Moon that stays.** The bodies wear an
+  atmosphere, the loose hot grains fly as comets, the planet shadows its disk,
+  and the film has a lens — shafts, streak, ghosts, shimmer, aberration, grain
+  — with thirty thousand faint stars and a camera that drifts until touched,
+  for 0.3 ms a frame. The Moon the theia run makes stays in orbit at 4.6 R⊕
+  where it used to drift out of the box; the clock reads zero at first touch,
+  the step runs twice as fast, and the approach is long enough to see who is
+  coming from where.
+- **2026-08-27 — A surface, and Chicxulub.** The planet wears a surface
+  textured in the coordinates each grain carries from where it sat in its
+  body, so the relief turns with the body, stretches with the arm and goes
+  with the ejecta. Chicxulub is the second scenario, at the other end of the
+  scale: a crater on a patch of ground, the plume's first day over a globe,
+  and a breakable Earth built by the engine both pages now share in `src/`.
+  The readout became a table that holds still, with a phone's own version.
+- **2026-08-26 — Heat, light and the books.** Every particle carries a
+  temperature and the rock glows by it, lighting the disk and the second body
+  with its own magma, under an ACES tone curve and a real sun. The bodies are
+  onions of Fibonacci shells with a feathered skin, they arrive spinning as
+  the Maclaurin spheroids their days call for, and the disk binds into
+  moonlets with a pairwise correction under the mesh. The readout keeps
+  momentum, angular momentum and energy to a fraction of a percent, the step
+  runs at 4× on a desk, and a phone holds the same collision at a quarter of
+  the particles.
+- **2026-08-25 — Impact.** Two planets of real mass — iron core, mantle,
+  crust — collide under their own gravity on the GPU, from the canonical
+  Moon-forming impact to a hit-and-run, under the real catalogue sky. A
+  readout says what stays, what orbits, and what escapes.
 
 The page began as a second page of [stardust](https://github.com/Gaploid/stardust)
 and moved into this repository on 2026-08-26, with its history.
