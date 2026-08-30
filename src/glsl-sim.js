@@ -6,11 +6,63 @@ var G = CC.glsl || (CC.glsl = {});
 var GLSL_GLOW = G.GLSL_GLOW;
 
 // ---------- the physics, in six passes a step ----------
-// 3-D grids live in 2-D atlases: slices side by side. The gravity mesh is a
-// fixed 64³ over ±6 R⊕ (8×8 slices of 64×64), its coarse twin 16³ (4×4 of 16²).
+// 3-D grids live in 2-D atlases: slices side by side. The gravity mesh is
+// 64³ over ±6 R⊕ of its centre (8×8 slices of 64×64), its coarse twin 16³
+// (4×4 of 16²).
 var GLSL_GRID = [
   'ivec2 fineAt(ivec3 c) { return ivec2((c.z & 7) * 64 + c.x, (c.z >> 3) * 64 + c.y); }',
   'ivec2 coarseAt(ivec3 c) { return ivec2((c.z & 3) * 16 + c.x, (c.z >> 2) * 16 + c.y); }'
+].join('\n');
+// There are two of the mesh: a box that rides the largest body, and one that
+// rides a second body of a twentieth of an Earth or more once it stands far
+// enough off to be leaving the first — a hit & run's survivor, the twin a
+// graze lets go. A particle is in the box it lies within (the nearer centre,
+// in a box's own measure, where the two overlap) and reads its gravity
+// there: its box's cells, the other box's contents as one mass, and the
+// pull of the strays that are in neither. In neither, it gets both boxes as
+// masses. A box comes as its half-width less its centre, so that p + uL is
+// the place in it; −1 is neither, and g is that place.
+var GLSL_BOX = [
+  'uniform vec3 uLA;',
+  'uniform vec3 uLB;',
+  'uniform float uBoxB;',         // 1 — the second box is up
+  'int boxOf(vec3 p, out vec3 g) {',
+  '  vec3 gA = (p + uLA) * uInvH - 0.5, gB = (p + uLB) * uInvH - 0.5;',
+  '  bool inA = all(greaterThanEqual(gA, vec3(0.0))) && all(lessThanEqual(gA, vec3(63.0)));',
+  '  bool inB = uBoxB > 0.5 && all(greaterThanEqual(gB, vec3(0.0))) && all(lessThanEqual(gB, vec3(63.0)));',
+  '  if (inA && inB) { vec3 dA = abs(gA - 31.5), dB = abs(gB - 31.5); inA = max(dA.x, max(dA.y, dA.z)) <= max(dB.x, max(dB.y, dB.z)); inB = !inA; }',
+  '  g = inA ? gA : gB;',
+  '  return inA ? 0 : inB ? 1 : -1;',
+  '}'
+].join('\n');
+// A box's contents as one mass, from its mono texel: the pull at p, and the
+// potential — for a particle in neither box. And the other box's pull on
+// what is in a box: not at the particle but at its box's centre of mass,
+// the same for every grain the box owns — so the two boxes pull each other
+// along the one line between their centres, a central force, and momentum
+// and angular momentum are kept exactly. Everything else was tried and
+// measured on the shatter and the twins coming apart. Taken at each
+// particle, two bodies that are not spheres pulled each other unequally by
+// a few thousandths and walked the barycentre a metre a second every
+// quarter hour while they were near. The pull at the centre carried out
+// by the tidal tensor kept momentum but ran away on the debris five radii
+// out, where a first order in the distance is no order at all, and took
+// the energy books with it. A blend — uniform over the body, the point's
+// own pull at the debris — leaked again through the seam, since the seam
+// ran through the body once the debris had moved its centre of mass. So
+// the box gives up the other's tide: a hundredth of its own gravity at the
+// distance the second box goes up, and the cube of that after; and its
+// debris feel the other box at its centre rather than at their own place,
+// which is off by a factor at most for what has flown halfway across.
+var GLSL_MASS = [
+  'vec3 massAt(vec3 p, sampler2D m) { vec4 mono = texelFetch(m, ivec2(0), 0); vec3 r = mono.xyz / max(mono.w, 1e-6) - p; float inv = inversesqrt(dot(r, r) + uEps2); return r * (uGm * mono.w * inv * inv * inv); }',
+  'float potAt(vec3 p, sampler2D m) { vec4 mono = texelFetch(m, ivec2(0), 0); vec3 r = mono.xyz / max(mono.w, 1e-6) - p; return -uGm * mono.w * inversesqrt(dot(r, r) + uEps2); }',
+  'vec3 crossAt(sampler2D other, sampler2D mine) {',
+  '  vec4 mo = texelFetch(other, ivec2(0), 0), mm = texelFetch(mine, ivec2(0), 0);',
+  '  vec3 d = mo.xyz / max(mo.w, 1e-6) - mm.xyz / max(mm.w, 1e-6);',
+  '  float inv = inversesqrt(dot(d, d) + uEps2);',
+  '  return d * (uGm * mo.w * inv * inv * inv);',
+  '}'
 ].join('\n');
 // The contact grid is a hashed cube of G³ cells (G a power of two), one cell =
 // one neighbour radius, wrapping around: far-apart particles may share a cell,
@@ -106,10 +158,13 @@ var SLOT_FS = [
 // 2. Mass onto the mesh: each particle is eight points, one per corner of its
 //    cell, cloud-in-cell weights, added up by blending. Mass is in particles;
 //    xyz carry mass-weighted position so a cell knows its centre of mass.
-//    A particle beyond the mesh adds instead, into the scratch texel on the
+//    A particle in neither box adds instead, into the scratch texel on the
 //    row below the atlas, the pull it has on the mesh (it feels the mesh's
 //    monopole; this is the equal and opposite, per unit of mesh mass, from
 //    last time's monopole), so the mesh is not pushed around one-sidedly.
+//    The other box's own are left out altogether: the step gives them to
+//    this box's particles as one mass, and this box's to theirs — and a
+//    body's worth of points blended into one texel would be a stall.
 var DEP_VS = [
   '#version 300 es',
   'precision highp float;',
@@ -120,7 +175,8 @@ var DEP_VS = [
   'uniform sampler2D uMono;',
   'uniform ivec2 uSize;',
   'uniform float uInvH;',
-  'uniform float uL;',
+  GLSL_BOX,
+  'uniform int uBox;',            // the box this deposit is for
   'uniform float uEps2;',
   GLSL_GRID,
   'out vec4 vW;',
@@ -133,10 +189,11 @@ var DEP_VS = [
   '  ivec2 tc = ivec2(i % uSize.x, i / uSize.x);',
   '  vec3 p = texelFetch(uPos, tc, 0).xyz;',
   '  float mr = texelFetch(uMat, tc, 0).r;',
-  '  vec3 g = (p + uL) * uInvH - 0.5;',
+  '  vec3 g;',
+  '  int mine = boxOf(p, g);',
   '  gl_PointSize = 1.0;',
-  '  if (any(lessThan(g, vec3(0.0))) || any(greaterThan(g, vec3(63.0)))) {',
-  '    if (k != 0) { gl_Position = vec4(4.0, 4.0, 4.0, 1.0); vW = vec4(0.0); return; }',
+  '  if (mine != uBox) {',
+  '    if (k != 0 || mine >= 0) { gl_Position = vec4(4.0, 4.0, 4.0, 1.0); vW = vec4(0.0); return; }',   // the other box's own: left out; a stray: its pull, once
   '    vec4 mono = texelFetch(uMono, ivec2(0), 0);',
   '    vec3 r = mono.xyz / max(mono.w, 1e-6) - p;',
   '    float inv = inversesqrt(dot(r, r) + uEps2);',
@@ -254,7 +311,6 @@ var CELL_FS = [
   'uniform sampler2D uFarT0;',
   'uniform sampler2D uFarT1;',
   'uniform float uH;',
-  'uniform float uL;',
   'uniform float uEps2;',
   'uniform float uGm;',
   GLSL_GRID,
@@ -395,12 +451,15 @@ var SIM_PRE = [
 ];
 var SIM_UNI_MESH = [
   GLSL_GRID,
-  'uniform sampler2D uForce;',
-  'uniform sampler2D uMono;',
+  'uniform sampler2D uForce;',    // the first box's cells, with its scratch texel
+  'uniform sampler2D uMono;',     // and its contents as one mass
+  'uniform sampler2D uForceB;',   // the second box's
+  'uniform sampler2D uMonoB;',
   'uniform float uInvH;',
-  'uniform float uL;',
+  GLSL_BOX,
   'uniform float uGm;',
   'uniform float uEps2;',
+  GLSL_MASS,
   'uniform sampler2D uPPSlot;',   // r — this particle's seat on the loose list, or -1
   'uniform sampler2D uPPForce;',  // the pairwise correction, by seat
 ];
@@ -408,22 +467,22 @@ var SIM_UNI_FIELD = [
   'uniform vec3 uGField;',   // the whole of gravity here: g, and down
 ];
 var SIM_GRAV_MESH = [
-  '  vec3 grav = vec3(0.0);',
-  '  vec3 g = (p + uL) * uInvH - 0.5;',
-  '  if (all(greaterThanEqual(g, vec3(0.0))) && all(lessThanEqual(g, vec3(63.0)))) {',
+  '  vec3 grav = vec3(0.0), g;',
+  '  int box = boxOf(p, g);',
+  '  if (box >= 0) {',
   '    vec3 f = floor(g), t = g - f;',
   '    ivec3 c0 = ivec3(f);',
   '    for (int k = 0; k < 8; k++) {',
   '      ivec3 o = ivec3(k & 1, (k >> 1) & 1, k >> 2);',
   '      vec3 w3 = mix(1.0 - t, t, vec3(o));',
-  '      grav += texelFetch(uForce, fineAt(min(c0 + o, ivec3(63))), 0).xyz * (w3.x * w3.y * w3.z);',
+  '      ivec2 at = fineAt(min(c0 + o, ivec3(63)));',
+  '      grav += (box == 0 ? texelFetch(uForce, at, 0).xyz : texelFetch(uForceB, at, 0).xyz) * (w3.x * w3.y * w3.z);',
   '    }',
-  '    grav -= texelFetch(uForce, ivec2(0, 512), 0).xyz * uGm;',   // what is beyond the mesh pulls back
+  '    grav -= (box == 0 ? texelFetch(uForce, ivec2(0, 512), 0).xyz : texelFetch(uForceB, ivec2(0, 512), 0).xyz) * uGm;',   // the strays in neither box pull back
+  '    if (uBoxB > 0.5) grav += box == 0 ? crossAt(uMonoB, uMono) : crossAt(uMono, uMonoB);',   // and the other box's contents, as one mass at this box's centre
   '  } else {',
-  '    vec4 mono = texelFetch(uMono, ivec2(0), 0);',
-  '    vec3 r = mono.xyz / max(mono.w, 1e-6) - p;',
-  '    float inv = inversesqrt(dot(r, r) + uEps2);',
-  '    grav = r * (uGm * mono.w * inv * inv * inv);',
+  '    grav = massAt(p, uMono);',
+  '    if (uBoxB > 0.5) grav += massAt(p, uMonoB);',
   '  }',
   '  float seat = texelFetch(uPPSlot, me, 0).r;',
   '  if (seat >= 0.0) { ivec2 sc = ivec2(int(seat) & 127, int(seat) >> 7); for (int s = 0; s < 4; s++) grav += texelFetch(uPPForce, sc + ivec2(0, 64 * s), 0).xyz; }',
@@ -555,12 +614,15 @@ var DIAG_FS = [
   'uniform sampler2D uQ;',
   'uniform sampler2D uForce;',
   'uniform sampler2D uMono;',
+  'uniform sampler2D uForceB;',
+  'uniform sampler2D uMonoB;',
   'uniform ivec2 uSize;',
   'uniform float uInvCell;',
   'uniform float uInvH;',
-  'uniform float uL;',
+  GLSL_BOX,
   'uniform float uEps2;',
   'uniform float uGm;',
+  GLSL_MASS,
   'uniform sampler2D uPPSlot;',
   'uniform sampler2D uPPForce;',
   GLSL_GRID,
@@ -581,19 +643,21 @@ var DIAG_FS = [
   '    if (seatIdx(sv) == myIdx) seated = 1.0;',
   '  }',
   '  float phi = 0.0, off = 0.0;',
-  '  vec3 g = (p + uL) * uInvH - 0.5;',
-  '  if (all(greaterThanEqual(g, vec3(0.0))) && all(lessThanEqual(g, vec3(63.0)))) {',
+  '  vec3 g;',
+  '  int box = boxOf(p, g);',
+  '  if (box >= 0) {',
   '    vec3 f = floor(g), t = g - f;',
   '    ivec3 c0 = ivec3(f);',
   '    for (int k = 0; k < 8; k++) {',
   '      ivec3 oo = ivec3(k & 1, (k >> 1) & 1, k >> 2);',
   '      vec3 w3 = mix(1.0 - t, t, vec3(oo));',
-  '      phi += texelFetch(uForce, fineAt(min(c0 + oo, ivec3(63))), 0).w * (w3.x * w3.y * w3.z);',
+  '      ivec2 at = fineAt(min(c0 + oo, ivec3(63)));',
+  '      phi += (box == 0 ? texelFetch(uForce, at, 0).w : texelFetch(uForceB, at, 0).w) * (w3.x * w3.y * w3.z);',
   '    }',
+  '    if (uBoxB > 0.5) phi += box == 0 ? potAt(p, uMonoB) : potAt(p, uMono);',   // the other box's contents as one mass: a pair on the mesh, counted from both ends
   '  } else {',
-  '    vec4 mono = texelFetch(uMono, ivec2(0), 0);',
-  '    vec3 r = mono.xyz / max(mono.w, 1e-6) - p;',
-  '    phi = -uGm * mono.w * inversesqrt(dot(r, r) + uEps2);',
+  '    phi = potAt(p, uMono);',
+  '    if (uBoxB > 0.5) phi += potAt(p, uMonoB);',
   '    off = 2.0;',
   '  }',
   '  float seat = texelFetch(uPPSlot, me, 0).r;',
@@ -619,17 +683,18 @@ var PPGATHER_FS = [
   'uniform sampler2D uIndex;',      // r — the particle in this seat, or -1
   'uniform ivec2 uSize;',
   'uniform float uInvH;',
-  'uniform float uL;',
-  'out vec4 o;',                    // xyz — position, w — mass, negative for a particle off the mesh, 0 for an empty seat
+  GLSL_BOX,
+  'layout(location = 0) out vec4 o;',      // xyz — position, w — mass, 0 for an empty seat
+  'layout(location = 1) out float oBox;',  // the box the particle reads, −1 for neither
   'void main() {',
   '  ivec2 me = ivec2(gl_FragCoord.xy);',
   '  float fi = texelFetch(uIndex, me, 0).r;',
-  '  if (fi < 0.0) { o = vec4(0.0); return; }',
+  '  if (fi < 0.0) { o = vec4(0.0); oBox = -1.0; return; }',
   '  int i = int(fi);',
   '  ivec2 t = ivec2(i % uSize.x, i / uSize.x);',
-  '  vec3 p = texelFetch(uPos, t, 0).xyz, g = (p + uL) * uInvH - 0.5;',
-  '  bool on = all(greaterThanEqual(g, vec3(0.0))) && all(lessThanEqual(g, vec3(63.0)));',
-  '  o = vec4(p, texelFetch(uMat, t, 0).r * (on ? 1.0 : -1.0));',
+  '  vec3 p = texelFetch(uPos, t, 0).xyz, g;',
+  '  oBox = float(boxOf(p, g));',
+  '  o = vec4(p, texelFetch(uMat, t, 0).r);',
   '}'
 ].join('\n');
 // …then every seat is summed against the whole list — in four slices, a
@@ -639,9 +704,10 @@ var PPGATHER_FS = [
 // meshPairTable) — in a texture, not a uniform array: an index that differs
 // from thread to thread into a uniform array is served one thread at a time,
 // and that was most of the pass — Newton's is softened at the particle
-// radius, and the difference is tapered out at the cut-off. A pair with a
-// side off the mesh got nothing from the mesh, and is given the whole of
-// Newton: a moonlet straddling the edge stays bound — subtracting the
+// radius, and the difference is tapered out at the cut-off. A pair that
+// does not read the same box got nothing from a mesh as a pair — the other
+// side came as part of one mass, or not at all — and is given the whole of
+// Newton: a moonlet straddling an edge stays bound — subtracting the
 // table there took half its self-gravity, and the tide had the rest.
 var PPFORCE_FS = [
   '#version 300 es',
@@ -649,6 +715,7 @@ var PPFORCE_FS = [
   'precision highp int;',
   'precision highp sampler2D;',
   'uniform sampler2D uList;',
+  'uniform sampler2D uBoxOf;',      // r — the box each seat reads
   'uniform int uCount;',
   'uniform float uGm;',
   'uniform float uCut;',
@@ -662,6 +729,7 @@ var PPFORCE_FS = [
   '  int share = (uCount + 3) >> 2, j0 = slice * share, j1 = min(j0 + share, uCount);',
   '  vec4 P = texelFetch(uList, me, 0);',
   '  if (myIdx >= uCount || P.w == 0.0) { o = vec4(0.0); return; }',
+  '  float myBox = texelFetch(uBoxOf, me, 0).r;',
   '  vec3 acc = vec3(0.0);',
   '  float pot = 0.0, cut2 = uCut * uCut, a = sqrt(uA2);',
   '  for (int j = j0; j < j1; j++) {',
@@ -676,8 +744,8 @@ var PPFORCE_FS = [
   '    float t = x - float(k);',
   '    float invN = inversesqrt(r2 + uA2);',
   '    float taper = smoothstep(uCut, 0.8 * uCut, r);',
-  '    vec2 T = mix(texelFetch(uTab, ivec2(k, 0), 0).rg, texelFetch(uTab, ivec2(k1, 0), 0).rg, t) * ((P.w > 0.0 && Q.w > 0.0) ? 1.0 : 0.0);',   // the mesh's share, if the mesh gave this pair one
-  '    float fn = invN * invN * invN * r - T.x / max(r2, uA2), mj = abs(Q.w);',
+  '    vec2 T = mix(texelFetch(uTab, ivec2(k, 0), 0).rg, texelFetch(uTab, ivec2(k1, 0), 0).rg, t) * ((myBox >= 0.0 && texelFetch(uBoxOf, ivec2(j & 127, j >> 7), 0).r == myBox) ? 1.0 : 0.0);',   // the mesh's share, if a mesh gave this pair one: both read the same box
+  '    float fn = invN * invN * invN * r - T.x / max(r2, uA2), mj = Q.w;',
   '    acc += d / max(r, 1e-6) * (mj * fn * taper);',
   '    pot += mj * (-invN - T.y / max(r, a)) * taper;',
   '  }',

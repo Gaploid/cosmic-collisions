@@ -1287,7 +1287,7 @@ function planetReport(rep) {
       ['energy', s.energy.toExponential(1) + ' J', xChx],
       ['rock', s.dKm + ' km', grains + ' · ' + grainNote],
       ['thrown off', fmtMass(thrown), fmtMass(r.escape * KG) + ' for good'],
-      ['heat', Math.round(r.Q / r.M * NB.E_KG / NB.CP_ROCK / 10) * 10 + ' K', 'over the whole planet']
+      ['heat', Math.round(NB.meanK(r) / 10) * 10 + ' K', 'over the whole planet']
     ]);
     return;
   }
@@ -1298,9 +1298,9 @@ function planetReport(rep) {
     ['rock', s.dKm + ' km', grains + ' · ' + grainNote],
     ['planet', r.largest.toFixed(4) + ' M⊕', pct(r.largestIron) + ' iron · ' + pct(r.largestImp) + ' rock' + (r.day < 200 ? ' · day ' + r.day.toFixed(1) + ' h' : '')],
     ['thrown off', fmtMass(thrown), thrownNote],
-    ['surface', Math.round(r.Tsurf / 100) * 100 + ' K', 'the hot patches’ glow · ' + Math.round(r.Q / r.M * NB.E_KG / NB.CP_ROCK / 10) * 10 + ' K averaged over the planet'],
+    ['surface', Math.round(r.Tsurf / 100) * 100 + ' K', 'the hot patches’ glow · ' + Math.round(NB.meanK(r) / 10) * 10 + ' K averaged over the planet'],
     ['2nd body', sec ? fmtMass(sec.mass * KG) : '—', sec ? sec.dist.toFixed(1) + ' R⊕ · ' + (sec.bound ? 'bound' : 'unbound') + ' · ' + pct(sec.imp) + ' rock' : ''],
-    ['books', (ref ? sgn((r.L - ref.L) / ref.L * 100, 2) + ' % L' : '—'), (ref ? 'energy ' + sgn((E + r.Q - ref.EQ) / Math.abs(ref.E) * 100, 2) + ' % · ' : '') + 'drift ' + (r.drift * NB.V_UNIT * 1000).toFixed(1) + ' m/s']
+    ['books', (ref ? sgn((r.L - ref.L) / ref.L * 100, 2) + ' % L' : '—'), (ref ? 'energy ' + sgn((E + r.Q - ref.EQ) / ref.scale * 100, 2) + ' % · ' : '') + 'drift ' + (r.drift * NB.V_UNIT * 1000).toFixed(1) + ' m/s']
   ]);
 }
 

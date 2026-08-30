@@ -22,13 +22,19 @@ var T_UNIT = 805, V_UNIT = 7.91;
 var E_KG = 6.256e7;                         // GM⊕/R⊕: the energy unit per kilogram, J/kg
 var CP_ROCK = 1200, CP_IRON = 450;          // heat capacities, J/kg·K — molten silicate, liquid iron
 var L_EM = 0.1163;                          // the Earth–Moon system's angular momentum today, 3.5e34 kg m²/s, in M⊕√(GM⊕R⊕)
+// the heat a readout shows as a temperature: the mean rise over the whole
+// mass, at the capacity of what that mass is. Iron holds under half of what
+// rock does per kilogram and a third of a planet is iron, so rock's own
+// capacity over everything reads a quarter low — the shader already gives
+// each grain its own (uCpIron), and this is the same sum over the books
+function meanK(r) { return r.Q / r.M * E_KG / (CP_ROCK + r.iron * (CP_IRON - CP_ROCK)); }
 // A lattice of touching spheres fills 74 % of the space; a pile poured at
 // random jams at about 64 %, and the onion the bodies are built as jams a
 // little looser than the lattice it replaces — left at the lattice's radius
 // its particles would stand the body 4 % wide of the radius its mass asks
 // for, and 4 % less bound. The grains are that much smaller instead.
 var JAM = 0.96;
-var FL = 6.0, FH = 2 * FL / 64;             // gravity mesh: 64³ cells over ±6 R⊕
+var FL = 6.0, FH = 2 * FL / 64;             // gravity mesh: 64³ cells over ±6 R⊕ of its centre — two of them, see boxes()
 var PP_CAP = 8192, PP_W = 128, PP_H = 64;   // the loose material the pairwise pass can take, as a 128×64 list
 var PP_SLICES = 4;                          // the pairwise sum is done in this many parts, one atlas row of seats each (PPFORCE_FS and its readers count on four)
 var PP_CUT = 5 * FH;                        // how far the pairwise correction reaches: five cells
@@ -213,6 +219,9 @@ function build(opt) {
     diag: floatTex(W, H, null), ref: null,
     t: -approachTime(rel, M, Re1 + Re2 + 2 * a), phase: 'settle', settleLeft: settle, settleTotal: settle, impactT: -1, com1: [0, 0, 0], stepNo: 0,
     damp: Math.exp(-dt * 12), soft: false, gen: ++gen,
+    // the gravity mesh's boxes: where each stands, at what speed, as of when
+    // — on the barycentre until the first look; placeBoxes() moves them
+    boxes: [{ on: true, cen: [0, 0, 0], vel: [0, 0, 0], t: 0 }, { on: false, cen: [0, 0, 0], vel: [0, 0, 0], t: 0 }],
     // the temperature a mantle particle's heat makes: each side of a contact
     // books the pair's whole dissipation, so half of it is that side's
     tK: 0.5 * E_KG / CP_ROCK / mref,
@@ -258,7 +267,6 @@ function setStaticUniforms() {
   gl.uniform1i(u.uPos, 0); gl.uniform1i(u.uMat, 1); gl.uniform1i(u.uMono, 2);
   gl.uniform2i(u.uSize, sim.W, sim.H);
   gl.uniform1f(u.uInvH, 1 / FH);
-  gl.uniform1f(u.uL, FL);
   gl.uniform1f(u.uEps2, FH * FH);
 
   gl.useProgram(coarseProg.p); gl.uniform1i(coarseProg.u.uFine, 0);
@@ -268,12 +276,11 @@ function setStaticUniforms() {
   u = cellProg.u; gl.useProgram(cellProg.p);
   gl.uniform1i(u.uFine, 0); gl.uniform1i(u.uCoarse, 1); gl.uniform1i(u.uFarA, 2); gl.uniform1i(u.uFarT0, 3); gl.uniform1i(u.uFarT1, 4);
   gl.uniform1f(u.uH, FH);
-  gl.uniform1f(u.uL, FL);
   gl.uniform1f(u.uEps2, 0.5 * FH * FH);
   gl.uniform1f(u.uGm, sim.m);
 
   u = simProg.u; gl.useProgram(simProg.p);
-  gl.uniform1i(u.uPos, 0); gl.uniform1i(u.uVel, 1); gl.uniform1i(u.uForce, 2); gl.uniform1i(u.uMono, 3); gl.uniform1i(u.uMat, 12); gl.uniform1i(u.uQ, 13);
+  gl.uniform1i(u.uPos, 0); gl.uniform1i(u.uVel, 1); gl.uniform1i(u.uForce, 2); gl.uniform1i(u.uMono, 3); gl.uniform1i(u.uForceB, 6); gl.uniform1i(u.uMonoB, 7); gl.uniform1i(u.uMat, 12); gl.uniform1i(u.uQ, 13);
   gl.uniform1i(u.uPPSlot, 14); gl.uniform1i(u.uPPForce, 15);
   gl.uniform1i(u.uSA, 4); gl.uniform1i(u.uSB, 5);
   gl.uniform2i(u.uSize, sim.W, sim.H);
@@ -282,7 +289,6 @@ function setStaticUniforms() {
   gl.uniform1i(u.uGMask, g.G - 1); gl.uniform1i(u.uGShift, g.GShift);
   gl.uniform1i(u.uSXMask, g.SX - 1); gl.uniform1i(u.uSXShift, g.SXShift);
   gl.uniform1f(u.uInvH, 1 / FH);
-  gl.uniform1f(u.uL, FL);
   gl.uniform1f(u.uDt, sim.dt);
   gl.uniform1f(u.uGm, sim.m);
   gl.uniform1f(u.uEps2, FH * FH);
@@ -304,7 +310,7 @@ function setStaticUniforms() {
   gl.uniform3fv(u.uSpin0, sim.spin0); gl.uniform3fv(u.uSpin1, sim.spin1);
 
   u = diagProg.u; gl.useProgram(diagProg.p);
-  gl.uniform1i(u.uPos, 0); gl.uniform1i(u.uQ, 1); gl.uniform1i(u.uForce, 2); gl.uniform1i(u.uMono, 3);
+  gl.uniform1i(u.uPos, 0); gl.uniform1i(u.uQ, 1); gl.uniform1i(u.uForce, 2); gl.uniform1i(u.uMono, 3); gl.uniform1i(u.uForceB, 6); gl.uniform1i(u.uMonoB, 7);
   gl.uniform1i(u.uPPSlot, 12); gl.uniform1i(u.uPPForce, 13);
   gl.uniform1i(u.uSA, 4); gl.uniform1i(u.uSB, 5);
   gl.uniform2i(u.uSize, sim.W, sim.H);
@@ -312,7 +318,6 @@ function setStaticUniforms() {
   gl.uniform1i(u.uGMask, g.G - 1); gl.uniform1i(u.uGShift, g.GShift);
   gl.uniform1i(u.uSXMask, g.SX - 1); gl.uniform1i(u.uSXShift, g.SXShift);
   gl.uniform1f(u.uInvH, 1 / FH);
-  gl.uniform1f(u.uL, FL);
   gl.uniform1f(u.uEps2, FH * FH);
   gl.uniform1f(u.uGm, sim.m);
 
@@ -320,15 +325,52 @@ function setStaticUniforms() {
   gl.uniform1i(u.uPos, 0); gl.uniform1i(u.uMat, 1); gl.uniform1i(u.uIndex, 2);
   gl.uniform2i(u.uSize, sim.W, sim.H);
   gl.uniform1f(u.uInvH, 1 / FH);
-  gl.uniform1f(u.uL, FL);
   u = permProg.u; gl.useProgram(permProg.p);
   gl.uniform1i(u.uPos, 0); gl.uniform1i(u.uVel, 1); gl.uniform1i(u.uAux, 2); gl.uniform1i(u.uQ, 3); gl.uniform1i(u.uPerm, 4);
   gl.uniform2i(u.uSize, sim.W, sim.H);
   u = ppForceProg.u; gl.useProgram(ppForceProg.p);
-  gl.uniform1i(u.uList, 0); gl.uniform1i(u.uTab, 1);
+  gl.uniform1i(u.uList, 0); gl.uniform1i(u.uTab, 1); gl.uniform1i(u.uBoxOf, 2);
   gl.uniform1f(u.uGm, sim.m);
   gl.uniform1f(u.uCut, PP_CUT);
   gl.uniform1f(u.uA2, sim.a * sim.a);
+}
+
+// Where the boxes stand this mesh step. The first is on the largest body's
+// own centre, the second on the second body's while it is up — each where
+// the last look put it, carried on at its speed since. A box's uniform is
+// its half-width less its centre, so that p + uL is the place in it.
+function boxes() {
+  var b = sim.boxes, L = [], i, k;
+  for (i = 0; i < 2; i++) { var dt = sim.t - b[i].t; for (k = 0; k < 3; k++) L.push(FL - b[i].cen[k] - b[i].vel[k] * dt); }
+  var progs = [depProg, simProg, diagProg, ppGatherProg];
+  for (i = 0; i < progs.length; i++) {
+    var u = progs[i].u; gl.useProgram(progs[i].p);
+    gl.uniform3f(u.uLA, L[0], L[1], L[2]); gl.uniform3f(u.uLB, L[3], L[4], L[5]); gl.uniform1f(u.uBoxB, b[1].on ? 1 : 0);
+  }
+}
+// The boxes from a look. The second goes up when a second body of a
+// twentieth of an Earth or more — enough for the mesh to hold on its own —
+// stands so far off that it is about to leave the first box: its centre
+// past the edge less 1.3 of its radii, its far side and the debris round
+// it at the edge. Not sooner: while both are in the one box the mesh has
+// their tides on each other cell by cell, and the far field the two boxes
+// trade is only the first order of that. It comes down once the body is
+// back within by half a radius more, or when there is no such body. Its
+// mono texel is primed with the body, so its first deposit's scratch is
+// not read off nothing.
+function placeBoxes(r) {
+  var b = sim.boxes, sec = r.second, B = b[1];
+  b[0] = { on: true, cen: r.core, vel: r.bodyVel, t: r.t };
+  if (sec && sec.mass > 0.05) {
+    var d = Math.max(Math.abs(sec.core[0] - r.core[0]), Math.abs(sec.core[1] - r.core[1]), Math.abs(sec.core[2] - r.core[2])), far = FL - 1.3 * Math.cbrt(sec.mass);
+    if (!B.on && d > far) {
+      B.on = true;
+      var w = sec.mass / sim.m, c = sec.core;
+      gl.bindTexture(gl.TEXTURE_2D, pm[1].mono);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 1, 1, gl.RGBA, gl.FLOAT, new Float32Array([c[0] * w, c[1] * w, c[2] * w, w]));
+    } else if (B.on && d < far - 0.5) B.on = false;
+    B.cen = sec.core; B.vel = sec.vel; B.t = r.t;
+  } else B.on = false;
 }
 
 // 1. contact cells, one seat per pass: seat k is a channel of one of the
@@ -356,51 +398,60 @@ function passSlots() {
   gl.disable(gl.DEPTH_TEST); gl.depthMask(false);
 }
 
-// 2. mass onto the mesh
-function passDeposit() {
+// 2. mass onto the mesh — box b's own, and the strays' pull
+function passDeposit(b) {
+  var m = pm[b || 0];
   gl.useProgram(depProg.p);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, pm.fineFbo);
+  gl.uniform1i(depProg.u.uBox, b || 0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, m.fineFbo);
   gl.viewport(0, 0, 512, 513);
   gl.clearColor(0, 0, 0, 0);
   gl.clear(gl.COLOR_BUFFER_BIT);
   gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sim.src.pos);
   gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, sim.mat);
-  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, pm.mono);
+  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, m.mono);
   gl.drawArrays(gl.POINTS, 0, sim.N * 8);
   gl.disable(gl.BLEND);
 }
 
 // 3. the coarse mesh, 4. its total
-function passCoarse() {
+function passCoarse(b) {
+  var m = pm[b || 0];
   gl.useProgram(coarseProg.p);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, pm.coarseFbo);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, m.coarseFbo);
   gl.viewport(0, 0, 64, 64);
-  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, pm.fine);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, m.fine);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   gl.useProgram(monoProg.p);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, pm.monoFbo);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, m.monoFbo);
   gl.viewport(0, 0, 1, 1);
-  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, pm.coarse);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, m.coarse);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 }
 
 // 5. the far field of every block, 6. gravity at every occupied cell
-function passCell() {
+function passCell(b) {
+  var m = pm[b || 0];
   gl.useProgram(farProg.p);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, pm.farFbo);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, m.farFbo);
   gl.viewport(0, 0, 64, 64);
-  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, pm.coarse);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, m.coarse);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   gl.useProgram(cellProg.p);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, pm.forceFbo);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, m.forceFbo);
   gl.viewport(0, 0, 512, 513);
-  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, pm.fine);
-  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, pm.coarse);
-  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, pm.farA);
-  gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, pm.farT0);
-  gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, pm.farT1);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, m.fine);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, m.coarse);
+  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, m.farA);
+  gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, m.farT0);
+  gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, m.farT1);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+// the mesh, box by box: the first always, the second while it is up
+function passMesh() {
+  passDeposit(0); passCoarse(0); passCell(0);
+  if (sim.boxes[1].on) { passDeposit(1); passCoarse(1); passCell(1); }
 }
 
 // 6. the particles: read src, write dst, swap
@@ -411,10 +462,12 @@ function passSim(settle, kick, gdt) {
   gl.viewport(0, 0, sim.W, sim.H);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sim.src.pos);
   gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, sim.src.vel);
-  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, pm.force);
-  gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, pm.mono);
+  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, pm[0].force);
+  gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, pm[0].mono);
   gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, g.slot[0]);
   gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D, g.slot[1]);
+  gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, pm[1].force);
+  gl.activeTexture(gl.TEXTURE7); gl.bindTexture(gl.TEXTURE_2D, pm[1].mono);
   gl.activeTexture(gl.TEXTURE12); gl.bindTexture(gl.TEXTURE_2D, sim.mat);
   gl.activeTexture(gl.TEXTURE13); gl.bindTexture(gl.TEXTURE_2D, sim.src.q);
   gl.activeTexture(gl.TEXTURE14); gl.bindTexture(gl.TEXTURE_2D, pp.slot);
@@ -434,17 +487,20 @@ function passSim(settle, kick, gdt) {
 // as they are right now — so the seat check is exact and the potential current
 function passDiag() {
   var g = grid;
+  boxes();
   passSlots();
-  passDeposit(); passCoarse(); passCell(); passPP();
+  passMesh(); passPP();
   gl.useProgram(diagProg.p);
   gl.bindFramebuffer(gl.FRAMEBUFFER, sim.diagFbo);
   gl.viewport(0, 0, sim.W, sim.H);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sim.src.pos);
   gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, sim.src.q);
-  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, pm.force);
-  gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, pm.mono);
+  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, pm[0].force);
+  gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, pm[0].mono);
   gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, g.slot[0]);
   gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D, g.slot[1]);
+  gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, pm[1].force);
+  gl.activeTexture(gl.TEXTURE7); gl.bindTexture(gl.TEXTURE_2D, pm[1].mono);
   gl.activeTexture(gl.TEXTURE12); gl.bindTexture(gl.TEXTURE_2D, pp.slot);
   gl.activeTexture(gl.TEXTURE13); gl.bindTexture(gl.TEXTURE_2D, pp.force);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -466,6 +522,7 @@ function passPP() {
   gl.viewport(0, 0, PP_W, PP_H * PP_SLICES);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, pp.list);
   gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, pp.tab);
+  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, pp.box);
   gl.uniform1i(ppForceProg.u.uCount, pp.count);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 }
@@ -496,7 +553,7 @@ function step(settle, kick) {
   var n = sim.stepNo++;
   if (n % 2 === 0) passSlots();
   var mesh = n % MESH_EVERY === 0;
-  if (mesh) { passDeposit(); passCoarse(); passCell(); passPP(); }
+  if (mesh) { boxes(); passMesh(); passPP(); }
   passSim(settle, kick, mesh ? MESH_EVERY * sim.dt : 0);
 }
 
@@ -568,6 +625,8 @@ function rigidStep(dtF) {
     sim.bulk0 = [-v[0] * M2 / M, -v[1] * M2 / M, -v[2] * M2 / M];
     sim.bulk1 = [v[0] * M1 / M, v[1] * M1 / M, v[2] * M1 / M];
     cen = centres(r); sim.cen0 = cen[0]; sim.cen1 = cen[1];
+    sim.boxes[0] = { on: true, cen: cen[0], vel: sim.bulk0, t: sim.t };   // the first box on the target, where the approach has carried it —
+    sim.boxes[1].on = false;                                               // and the second down: the bodies touch, and one box has the contact
     sim.stepNo = 0;           // the bodies have moved: rebuild cells and mesh
     step(false, true);
     sim.t += sim.dt;
@@ -758,7 +817,11 @@ function fof(N, mref, a, P, V, R, D, spring, touch, cap, sort) {
     } else esc += m;
   }
   var jD = orbit > 0 ? Math.sqrt(Dx * Dx + Dy * Dy + Dz * Dz) / (orbit * Math.sqrt(A.mass * 2.9)) : 0;
-  var moon = Math.max(0, orbit * (1.9 * jD - 1.1 - 1.9 * 0.05));
+  // and never more of a moon than there is disk to make it from: the fit is
+  // a straight line in j and passes the disk's own mass at j = 1.13, which a
+  // disk holding a moonlet already gathered well outside the Roche limit
+  // reaches — so the twentieth lost on the way is also the cap
+  var moon = Math.min(Math.max(0, orbit * (1.9 * jD - 1.1 - 1.9 * 0.05)), 0.95 * orbit);
   var second = null;
   if (B && B.n >= Math.max(8, N / 1000)) {
     var dAB = Math.sqrt((B.com[0] - A.com[0]) * (B.com[0] - A.com[0]) + (B.com[1] - A.com[1]) * (B.com[1] - A.com[1]) + (B.com[2] - A.com[2]) * (B.com[2] - A.com[2]));
@@ -771,11 +834,12 @@ function fof(N, mref, a, P, V, R, D, spring, touch, cap, sort) {
   // feels the mesh's monopole and is not felt back. The heat is the ledger
   // each particle keeps, halved the same way. And the contact cells: who has
   // no seat in his, whose is full.
-  var Mt = 0, px = 0, py = 0, pz = 0, Jx = 0, Jy = 0, Jz = 0, ke = 0, pe = 0, Q = 0, unseated = 0, full = 0;
+  var Mt = 0, px = 0, py = 0, pz = 0, Jx = 0, Jy = 0, Jz = 0, ke = 0, pe = 0, Q = 0, unseated = 0, full = 0, ironAll = 0;
   for (i = 0; i < N; i++) {
     m = mref * R[i];
     var bx = P[i * 4], by = P[i * 4 + 1], bz = P[i * 4 + 2], bu = V[i * 4], bv = V[i * 4 + 1], bw = V[i * 4 + 2];
     Mt += m; px += m * bu; py += m * bv; pz += m * bw;
+    if (P[i * 4 + 3] - 4 * Math.floor(P[i * 4 + 3] / 4) < 0.5) ironAll += m;   // core material, either body's: what the heat's capacity is read from
     Jx += m * (by * bw - bz * bv); Jy += m * (bz * bu - bx * bw); Jz += m * (bx * bv - by * bu);
     ke += 0.5 * m * (bu * bu + bv * bv + bw * bw);
     var flag = D[i * 4 + 1], off = flag >= 2;
@@ -805,14 +869,14 @@ function fof(N, mref, a, P, V, R, D, spring, touch, cap, sort) {
   var list = new Float32Array(Math.min(nLoose, cap));
   for (i = 0; i < N && wr < list.length; i++) if (loose(i) && far2(A, i) >= least) list[wr++] = i;
   // the spatial order, when asked: a Morton key of 7 bits an axis over the
-  // mesh's box, a counting sort on it; perm says which particle goes where,
+  // largest body's box, a counting sort on it; perm says which particle goes where,
   // and the loose list is spoken in the new names
   var perm = null;
   if (sort) {
     var KB = 1 << 21, keys = new Int32Array(N), bins = new Int32Array(KB + 1), into = new Int32Array(N);
     perm = new Float32Array(N);
     for (i = 0; i < N; i++) {
-      var mx = Math.min(127, Math.max(0, Math.floor((P[i * 4] + 6) / 12 * 128))), my = Math.min(127, Math.max(0, Math.floor((P[i * 4 + 1] + 6) / 12 * 128))), mz = Math.min(127, Math.max(0, Math.floor((P[i * 4 + 2] + 6) / 12 * 128)));
+      var mx = Math.min(127, Math.max(0, Math.floor((P[i * 4] - A.core[0] + 6) / 12 * 128))), my = Math.min(127, Math.max(0, Math.floor((P[i * 4 + 1] - A.core[1] + 6) / 12 * 128))), mz = Math.min(127, Math.max(0, Math.floor((P[i * 4 + 2] - A.core[2] + 6) / 12 * 128)));
       var mk = 0;
       for (k = 0; k < 7; k++) mk |= ((mx >> k) & 1) << (3 * k) | ((my >> k) & 1) << (3 * k + 1) | ((mz >> k) & 1) << (3 * k + 2);
       keys[i] = mk; bins[mk + 1]++;
@@ -821,9 +885,9 @@ function fof(N, mref, a, P, V, R, D, spring, touch, cap, sort) {
     for (i = 0; i < N; i++) { var dst = bins[keys[i]]++; perm[dst] = i; into[i] = dst; }
     for (i = 0; i < list.length; i++) list[i] = into[list[i]];
   }
-  return { largest: A.mass, largestImp: A.imp, largestIron: A.iron, day: day, tilt: tilt, axis: [lx, ly, lz], orbit: orbit, escape: esc, second: second, com: A.com, core: A.core, vel: A.vel, R: A.R, Redge: A.Redge, Tsurf: A.Tsurf, hotCom: A.hotCom, hotR: A.hotR,
+  return { largest: A.mass, largestImp: A.imp, largestIron: A.iron, day: day, tilt: tilt, axis: [lx, ly, lz], bodyVel: [bvx, bvy, bvz], orbit: orbit, escape: esc, second: second, com: A.com, core: A.core, vel: A.vel, R: A.R, Redge: A.Redge, Tsurf: A.Tsurf, hotCom: A.hotCom, hotR: A.hotR,
            impMass: A.impMass, impCom: A.impCom, impRms: A.impRms,
-           M: Mt, drift: Math.sqrt(px * px + py * py + pz * pz) / Mt, L: Math.sqrt(Jx * Jx + Jy * Jy + Jz * Jz),
+           M: Mt, iron: ironAll / Mt, drift: Math.sqrt(px * px + py * py + pz * pz) / Mt, L: Math.sqrt(Jx * Jx + Jy * Jy + Jz * Jz),
            KE: ke, PE: pe, EL: elastic, Q: Q, unseated: unseated / N, full: full / N,
            pp: { list: list, loose: nLoose }, jD: jD, moon: moon, perm: perm };
 }
@@ -847,6 +911,7 @@ try {
 } catch (e) { worker = null; }
 function applyReport(r) {
   report = r; sim.com1 = r.com;
+  placeBoxes(r);
   CC.setReport(r);
   // the books at the first look at a body that is under way — settled, and
   // carried by the approach. On the frame the settle ends the bodies are
@@ -854,7 +919,10 @@ function applyReport(r) {
   // orbit: the angular momentum would read a hundred and eighty per cent up
   // ever after
   var going = sim.phase === 'full' || sim.bulk0[0] !== 0 || sim.bulk0[1] !== 0 || sim.bulk0[2] !== 0;
-  if (!sim.ref && going) sim.ref = { E: r.KE + r.PE + r.EL, EQ: r.KE + r.PE + r.EL + r.Q, L: r.L };
+  // and the scale the energy balance is read against: the kinetic and the
+  // potential together, not the total — a shatter at 2.6 escape speeds has
+  // a total of nothing, and read against it a hundredth was a hundred per cent
+  if (!sim.ref && going) sim.ref = { E: r.KE + r.PE + r.EL, EQ: r.KE + r.PE + r.EL + r.Q, L: r.L, scale: r.KE - r.PE };
   if (r.perm) applyPerm(r.perm);
   setPP(r.pp);
 }
@@ -977,35 +1045,49 @@ function init(o) {
   ppGatherProg = program(SH.QUAD_VS, SH.PPGATHER_FS);
   ppForceProg = program(SH.QUAD_VS, SH.PPFORCE_FS);
   permProg = program(SH.QUAD_VS, SH.PERM_FS);
-  pm = {
-    fine: floatTex(512, 513, null, floatBlend ? gl.RGBA32F : gl.RGBA16F, floatBlend ? gl.FLOAT : gl.HALF_FLOAT),   // 64³: Σ w·xyz, Σ w — blendable; a scratch row below
-    coarse: floatTex(64, 64, null),                              // 16³
-    mono: floatTex(1, 1, null),
-    farA: floatTex(64, 64, null), farT0: floatTex(64, 64, null), farT1: floatTex(64, 64, null),   // each block's far field: acceleration and potential, and the tidal tensor in six
-    force: floatTex(512, 513, null)                              // acceleration and potential at every fine cell; the scratch row copied
-  };
-  pm.fineFbo = fboFor(pm.fine); pm.coarseFbo = fboFor(pm.coarse); pm.monoFbo = fboFor(pm.mono); pm.forceFbo = fboFor(pm.force);
-  pm.farFbo = gl.createFramebuffer();
-  gl.bindFramebuffer(gl.FRAMEBUFFER, pm.farFbo);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, pm.farA, 0);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, pm.farT0, 0);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT2, gl.TEXTURE_2D, pm.farT1, 0);
-  gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2]);
-  if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error('far framebuffer incomplete');
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  // the mesh, twice over: a box on the largest body, and one for a second
+  // body that is leaving it — placeBoxes() says when, boxes() where
+  function meshBox() {
+    var m = {
+      fine: floatTex(512, 513, null, floatBlend ? gl.RGBA32F : gl.RGBA16F, floatBlend ? gl.FLOAT : gl.HALF_FLOAT),   // 64³: Σ w·xyz, Σ w — blendable; a scratch row below
+      coarse: floatTex(64, 64, null),                              // 16³
+      mono: floatTex(1, 1, null),
+      farA: floatTex(64, 64, null), farT0: floatTex(64, 64, null), farT1: floatTex(64, 64, null),   // each block's far field: acceleration and potential, and the tidal tensor in six
+      force: floatTex(512, 513, null)                              // acceleration and potential at every fine cell; the scratch row copied
+    };
+    m.fineFbo = fboFor(m.fine); m.coarseFbo = fboFor(m.coarse); m.monoFbo = fboFor(m.mono); m.forceFbo = fboFor(m.force);
+    m.farFbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, m.farFbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, m.farA, 0);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, m.farT0, 0);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT2, gl.TEXTURE_2D, m.farT1, 0);
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2]);
+    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error('far framebuffer incomplete');
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return m;
+  }
+  pm = [meshBox(), meshBox()];
 
   // the loose material's pairwise pass: a seat per particle (-1 for none), the
   // particle in each seat, the seats' positions gathered, the correction found
   pp = {
     index: floatTex(PP_W, PP_H, null, gl.R32F, gl.FLOAT, gl.RED),
     list: floatTex(PP_W, PP_H, null), force: floatTex(PP_W, PP_H * PP_SLICES, null),
+    box: floatTex(PP_W, PP_H, null, gl.R32F, gl.FLOAT, gl.RED),   // the box each seat reads: which pairs a mesh gave a share
     tab: null, slot: null, slotArr: null, indexArr: new Float32Array(PP_CAP), count: 0, loose: 0
   };
   // the mesh's pair force and potential by distance, for the pairwise pass
   var tab = new Float32Array(PP_TAB.f.length * 2);
   for (var i = 0; i < PP_TAB.f.length; i++) { tab[i * 2] = PP_TAB.f[i]; tab[i * 2 + 1] = PP_TAB.p[i]; }
   pp.tab = floatTex(PP_TAB.f.length, 1, tab, gl.RG32F, gl.FLOAT, gl.RG);
-  pp.listFbo = fboFor(pp.list); pp.forceFbo = fboFor(pp.force);
+  pp.listFbo = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, pp.listFbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, pp.list, 0);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, pp.box, 0);
+  gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+  if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error('list framebuffer incomplete');
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  pp.forceFbo = fboFor(pp.force);
 
 }
 
@@ -1020,7 +1102,7 @@ CC.nbody = {
     if (name === 'sim') simProg = p; else if (name === 'slot') slotProg = p; else if (name === 'dep') depProg = p; else if (name === 'cell') cellProg = p; else if (name === 'far') farProg = p; else if (name === 'pp') ppForceProg = p;
     setStaticUniforms();
   },
-  passes: { slots: passSlots, deposit: passDeposit, coarse: passCoarse, cell: passCell, pp: passPP, sim: passSim, diag: passDiag },
+  passes: { slots: passSlots, deposit: passDeposit, coarse: passCoarse, cell: passCell, mesh: passMesh, pp: passPP, sim: passSim, diag: passDiag },
   get sim() { return sim; },
   get report() { return report; },
   get pending() { return pending; },
@@ -1032,6 +1114,6 @@ CC.nbody = {
   get state() { return { analyzing: analyzing, pending: !!pending, worker: !!worker, analyses: analyses, analyzedAt: analyzedAt, stepNo: sim && sim.stepNo, waitStatus: pending ? gl.clientWaitSync(pending.sync, 0, 0) : null }; },
   set meshEvery(n) { MESH_EVERY = n; },
   set asyncRead(v) { asyncRead = !!v; },
-  T_UNIT: T_UNIT, V_UNIT: V_UNIT, E_KG: E_KG, CP_ROCK: CP_ROCK, CP_IRON: CP_IRON, L_EM: L_EM, JAM: JAM, PP_CAP: PP_CAP
+  T_UNIT: T_UNIT, V_UNIT: V_UNIT, E_KG: E_KG, CP_ROCK: CP_ROCK, CP_IRON: CP_IRON, L_EM: L_EM, JAM: JAM, PP_CAP: PP_CAP, meanK: meanK
 };
 })();

@@ -102,10 +102,10 @@ var canvas = boot.canvas, gl = boot.gl, floatBlend = boot.floatBlend;
 // The engine's: G = 1, Earth mass = 1, Earth radius = 1, so the time unit is
 // 805 s and the velocity unit 7.91 km/s. The page reads them from src/nbody.js
 // for the clock and the readout.
-var T_UNIT = CC.nbody.T_UNIT, V_UNIT = CC.nbody.V_UNIT, E_KG = CC.nbody.E_KG, CP_ROCK = CC.nbody.CP_ROCK, L_EM = CC.nbody.L_EM;
+var T_UNIT = CC.nbody.T_UNIT, V_UNIT = CC.nbody.V_UNIT, L_EM = CC.nbody.L_EM;
 var N_CHOICES = CC.N_CHOICES, N_LABELS = CC.N_LABELS;
 var PRESETS = {
-  theia:   { q: 0.10, angle: 45, vfac: 1.05, incl: 50, dist: 10.5, label: 'theia' },     // the canonical Moon-forming impact, from 50° above the plane: the tilt it leaves Earth is 23°
+  theia:   { q: 0.10, angle: 45, vfac: 1.05, incl: 50, dist: 10.5, label: 'theia' },     // the canonical Moon-forming impact, from 50° above the plane: the tilt it leaves Earth is 28°
   headon:  { q: 0.10, angle: 0,  vfac: 1.00, incl: 0,  dist: 8,   label: 'head-on' },
   hitrun:  { q: 0.25, angle: 65, vfac: 1.60, incl: 0,  dist: 10,  label: 'hit & run' },  // grazing and fast: the impactor survives
   twins:   { q: 1.00, angle: 45, vfac: 1.10, incl: 0,  dist: 9,   label: 'twins' },
@@ -261,7 +261,9 @@ function hud() {
   else sub += ' · aftermath';
   $('hud-sub').textContent = sub;
   $('hud-clock').textContent = sim ? fmtTime(sim.t) : 'T− 0h 00m';
-  $('hud-fps').textContent = sim ? fmtCount(sim.N) + (DEV.compact ? '' : ' bodies') + ' · ' + Math.round(sim.vc * V_UNIT) + ' km/s · ' + fps + ' fps' : '';
+  // the speed is the impact's — stated at contact when the run was built, and
+  // the same all the way through; it is said so, next to two numbers that are live
+  $('hud-fps').textContent = sim ? fmtCount(sim.N) + (DEV.compact ? '' : ' bodies') + ' · impact ' + Math.round(sim.vc * V_UNIT) + ' km/s · ' + fps + ' fps' : '';
   loading();
   var rep = $('hud-report');
   if (report && sim) {
@@ -292,7 +294,7 @@ function hud() {
       ['escaping', fmtMass(report.escape), ''],
       ['2nd body', sec ? fmtMass(sec.mass) : dash, sec ? sec.dist.toFixed(1) + ' R\u2295 \u00b7 ' + (sec.bound ? 'bound' : 'unbound') + ' \u00b7 ' + pct(sec.imp) + ' impactor' : ''],
       ['L', (report.L / L_EM).toFixed(2) + ' LEM', (ref ? sgn((report.L - ref.L) / ref.L * 100, 2) + ' % \u00b7 ' : '') + 'drift ' + (report.drift * V_UNIT * 1000).toFixed(1) + ' m/s'],
-      ['energy', sgn(E, 3), 'heat ' + report.Q.toFixed(3) + ' \u2248 ' + Math.round(report.Q / report.M * E_KG / CP_ROCK / 100) * 100 + ' K' + (ref ? ' \u00b7 balance ' + sgn((E + report.Q - ref.EQ) / Math.abs(ref.E) * 100, 2) + ' %' : '')],
+      ['energy', sgn(E, 3), 'heat ' + report.Q.toFixed(3) + ' \u2248 ' + Math.round(NB.meanK(report) / 100) * 100 + ' K' + (ref ? ' \u00b7 balance ' + sgn((E + report.Q - ref.EQ) / ref.scale * 100, 2) + ' %' : '')],
       ['cells', (report.unseated * 100).toFixed(2) + ' %', 'unseated \u00b7 ' + (report.full * 100).toFixed(1) + ' % full \u00b7 pairs ' + fmtCount(report.pp.list.length) + (report.pp.loose > report.pp.list.length ? ' of ' + fmtCount(report.pp.loose) : '')]
     ]);
   }
@@ -468,7 +470,7 @@ window.__impact = {
   // the mesh's own books: the net force and torque its cells exert on each
   // other, which should be nothing — as fractions of the sum of their sizes
   meshCheck: function () {
-    var P = NB.passes, pm = NB.pm;
+    var P = NB.passes, pm = NB.pm[0];   // the first box: the planet's
     P.deposit(); P.coarse(); P.cell();
     var F = new Float32Array(512 * 512 * 4), Mm = new Float32Array(512 * 512 * 4);
     gl.bindFramebuffer(gl.FRAMEBUFFER, pm.forceFbo); gl.readPixels(0, 0, 512, 512, gl.RGBA, gl.FLOAT, F);

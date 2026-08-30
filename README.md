@@ -52,8 +52,12 @@ What runs:
 - **Gravity, from the particles themselves.** A 64³ particle mesh with a
   block-to-block far field, and everything loose — the arm, the disk, the
   escapers — corrected pairwise against it, P³M-style, so moonlets bind
-  instead of smearing. The Chicxulub crater page swaps it for a constant *g*
-  and down: a patch of ground too small to pull on itself.
+  instead of smearing. The mesh is a box of ±6 R⊕ that rides the largest
+  body, and a second box rides a second body of a twentieth of an Earth or
+  more once it is leaving the first — a hit & run's survivor, the twin a
+  graze lets go — the two pulling on each other as one mass each. The
+  Chicxulub crater page swaps it for a constant *g* and down: a patch of
+  ground too small to pull on itself.
 - **Contact.** A spring-dashpot along the line between two touching grains,
   with no tension: the material resists being squeezed, and can be pulled
   apart for nothing.
@@ -125,6 +129,20 @@ archive; public domain, free to use with credit.
 
 Broad strokes, newest first; the commit history tells each one in full.
 
+- **2026-08-30 — A box for each body.** The gravity mesh was a fixed box of
+  ±6 R⊕ about the barycentre, and whatever left it — a hit & run's survivor,
+  a shatter's recoiling target — lost its own gravity and came apart from
+  inside within the hour. Now a box rides the largest body and a second
+  rides a second body big enough to keep, so a grazing pair of Earths flies
+  apart whole, and the shatter's target, which the old box had broken up by
+  the seventh hour, survives it at 0.95 M⊕. The energy balance is read
+  against the run's kinetic and potential scale rather than its total,
+  which for a shatter is nothing.
+- **2026-08-30 — The readout's arithmetic.** The moon a disk makes is capped
+  at the disk there is to make it from, which the fit runs over past j = 1.13;
+  the heat reads as a temperature at rock and iron's capacity together rather
+  than rock's alone; and the speed beside the frame rate says it is the
+  impact's. Theia leaves a 28° tilt, not the 23° this page claimed.
 - **2026-08-29 — Surfaces and the melt.** The craters are craters now — a
   floor, a narrow crest, an ejecta blanket, a central peak in the biggest,
   rays off a few fresh ones — in four octaves so that there are four times
@@ -137,7 +155,7 @@ Broad strokes, newest first; the commit history tells each one in full.
   to a body's own centre and edge, and a giant impact takes the share of it
   the ground motion throws off — a tenth for Theia, a third for a hit & run,
   all of it for twins and the shatter — with a hole over the impact. Theia
-  comes in from above the orbital plane and leaves Earth a 23° tilt, and the
+  comes in from above the orbital plane and leaves Earth a 28° tilt, and the
   day and the axis on the readout are the planet's own rather than its
   group's. The picture keeps up at 4× and is whole from the first frame out
   from under the loader.
