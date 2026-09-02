@@ -129,6 +129,10 @@ archive; public domain, free to use with credit.
 
 Broad strokes, newest first; the commit history tells each one in full.
 
+- **2026-09-02 — Findable.** A title that says what the page is, a card for
+  the link, an *about* panel with the page in words — what a crawler, or a
+  reader without WebGL, gets of it — structured data, a sitemap and a
+  robots.txt, and the favicons as files.
 - **2026-08-30 — A box for each body.** The gravity mesh was a fixed box of
   ±6 R⊕ about the barycentre, and whatever left it — a hit & run's survivor,
   a shatter's recoiling target — lost its own gravity and came apart from

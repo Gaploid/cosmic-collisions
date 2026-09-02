@@ -45,8 +45,9 @@ html, body {
   color: #66788c;
   user-select: none;
 }
-.hud strong {
+.hud strong, .hud h1 {   /* the page's name is its one heading, dressed as the strong it was */
   display: block;
+  margin: 0;
   font-weight: 500;
   font-size: 13px;
   letter-spacing: 0.3em;
@@ -106,7 +107,7 @@ html, body {
   gap: 13px;
   pointer-events: auto;
 }
-#hud-scene, #hud-preset, #hud-run { display: flex; gap: 6px 16px; flex-wrap: wrap; align-items: baseline; }
+#hud-scene, #hud-preset, #hud-run, #hud-toggles { display: flex; gap: 6px 16px; flex-wrap: wrap; align-items: baseline; }
 /* a page that rebuilds its presets per view renders them into a span, whose
    buttons then have to be the row's own flex items to take its gap */
 #hud-preset-list { display: contents; }
@@ -168,6 +169,39 @@ html, body {
 #adv-panel::-webkit-scrollbar { width: 5px; }
 #adv-panel::-webkit-scrollbar-thumb { background: #2a3644; border-radius: 3px; }
 #adv-panel::-webkit-scrollbar-track { background: transparent; }
+/* the about panel is the page in words, for a reader without WebGL and for
+   the crawler: prose, so the HUD's caps and tracking come off inside it */
+#about-panel {
+  margin-top: 10px;
+  width: 64ch;
+  max-width: calc(100vw - 52px);
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #2a3644 transparent;
+  padding: 12px 14px;
+  background: rgba(8, 12, 18, 0.78);
+  border: 1px solid #22303e;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.65;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #9db0c4;
+  user-select: text;
+}
+#about-panel[hidden] { display: none; }
+#about-panel::-webkit-scrollbar { width: 5px; }
+#about-panel::-webkit-scrollbar-thumb { background: #2a3644; border-radius: 3px; }
+#about-panel::-webkit-scrollbar-track { background: transparent; }
+#about-panel h2 { margin: 0 0 6px; font-size: 11px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: #c2d4e6; }
+#about-panel p { margin: 0 0 8px; }
+#about-panel p:last-child { margin-bottom: 0; }
+#about-panel b { font-weight: 500; color: #c2d4e6; }
+#about-panel a { color: #c2d4e6; }
 #adv-panel label {
   display: grid;
   grid-template-columns: 88px 110px 40px;
@@ -240,7 +274,7 @@ html, body {
    button anyone can hit */
 @media (pointer: coarse) {
   .hud button { padding: 6px 0 7px; }
-  #adv-panel { background: rgba(6, 9, 14, 0.93); }   /* upright it lies over the planet, and 0.78 was not enough to read through */
+  #adv-panel, #about-panel { background: rgba(6, 9, 14, 0.93); }   /* upright it lies over the planet, and 0.78 was not enough to read through */
   .hud .iconbtn { width: 36px; height: 36px; }
   .hud .iconbtn svg { width: 15px; height: 15px; }
   #hud-src svg { width: 17px; height: 17px; }
@@ -251,13 +285,13 @@ html, body {
 @media (max-width: 640px) {
   #hud-help { display: none; }
   #hud-title { top: 14px; left: 16px; }
-  #hud-title strong { font-size: 12px; letter-spacing: 0.22em; }   /* the name is long; it has to clear the corner link */
+  #hud-title h1 { font-size: 12px; letter-spacing: 0.22em; }   /* the name is long; it has to clear the corner link */
   #hud-corner { top: 14px; right: 16px; }
   #hud-back { padding: 8px 10px; }
   #hud-controls { top: 78px; left: 16px; right: 16px; gap: 10px; }
   .hud { font-size: 12px; }
-  #hud-scene, #hud-preset, #hud-run { gap: 4px 14px; }
-  #adv-panel { width: auto; max-width: calc(100vw - 64px); }   /* on a phone it spans the column, sliders and all */
+  #hud-scene, #hud-preset, #hud-run, #hud-toggles { gap: 4px 14px; }
+  #adv-panel, #about-panel { width: auto; max-width: calc(100vw - 64px); }   /* on a phone it spans the column, sliders and all */
   #adv-panel label { grid-template-columns: 88px 1fr 48px; }   /* narrower and "impactor M⊕" folds in two */
   #adv-panel input[type="range"] { width: 100%; }
   #hud-back { display: none; }   /* one corner, one link: the source */
@@ -289,7 +323,7 @@ html, body {
 @media (max-height: 560px) {
   #hud-help { display: none; }
   #hud-title { top: 10px; left: 14px; }
-  #hud-title strong { font-size: 12px; letter-spacing: 0.22em; }
+  #hud-title h1 { font-size: 12px; letter-spacing: 0.22em; }
   #hud-corner { top: 10px; right: 14px; }
   #hud-back { padding: 6px 10px; }
   #hud-controls {
@@ -299,7 +333,7 @@ html, body {
     max-width: min(52vw, 330px);
     gap: 8px;
   }
-  #hud-scene, #hud-preset, #hud-run { gap: 2px 14px; }
+  #hud-scene, #hud-preset, #hud-run, #hud-toggles { gap: 2px 14px; }
   .hud button { padding: 4px 0 5px; }   /* every row given back is a row of panel */
   #hud-run { gap: 4px 12px; }
   .hud .iconbtn { width: 32px; height: 32px; }

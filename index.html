@@ -4,12 +4,21 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#04060a">
-<meta name="description" content="A giant impact, simulated: two self-gravitating planets of real mass collide in WebGL — the splash, the debris disk, and the moon that gathers out of it.">
-<meta property="og:title" content="Cosmic Collisions">
-<meta property="og:description" content="Two planets with real mass and gravity collide in your browser.">
+<title>Cosmic Collisions — giant impact and Moon formation simulator</title>
+<meta name="description" content="A giant impact simulation in WebGL: two planets of real mass collide under their own gravity — the Theia impact that made the Moon, the splash, the debris disk, and the moon that gathers out of it. In the browser, nothing to install.">
+<link rel="canonical" href="https://gaploid.github.io/cosmic-collisions/">
+<meta property="og:site_name" content="Cosmic Collisions">
+<meta property="og:title" content="Cosmic Collisions — giant impact simulator">
+<meta property="og:description" content="Two planets of real mass collide under their own gravity, in your browser: the impact that made the Moon.">
 <meta property="og:type" content="website">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>&#x1F4A5;</text></svg>">
-<title>Cosmic Collisions</title>
+<meta property="og:url" content="https://gaploid.github.io/cosmic-collisions/">
+<meta property="og:image" content="https://gaploid.github.io/cosmic-collisions/og-impact.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A planet struck by an impactor: hot rock splashing out into a debris disk">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="icon-impact.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="icon-impact.png">
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-M1GPXGSXSN"></script>
 <script>
@@ -20,13 +29,43 @@
   gtag('config', 'G-M1GPXGSXSN');
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="src/hud.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Cosmic Collisions",
+  "alternateName": "Giant impact simulator",
+  "url": "https://gaploid.github.io/cosmic-collisions/",
+  "description": "A giant impact simulation in WebGL: two planets of real mass collide under their own gravity — the Theia impact that made the Moon, the splash, the debris disk, and the moon that gathers out of it. In the browser, nothing to install.",
+  "applicationCategory": "EducationalApplication",
+  "operatingSystem": "Any",
+  "browserRequirements": "Requires WebGL 2",
+  "isAccessibleForFree": true,
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "image": "https://gaploid.github.io/cosmic-collisions/og-impact.jpg",
+  "screenshot": "https://gaploid.github.io/cosmic-collisions/og-impact.jpg",
+  "keywords": "giant impact, Moon formation, Theia, planet collision, n-body simulation, WebGL",
+  "author": {
+    "@type": "Person",
+    "name": "Gaploid",
+    "url": "https://github.com/Gaploid"
+  },
+  "license": "https://github.com/Gaploid/cosmic-collisions/blob/main/LICENSE",
+  "sameAs": "https://github.com/Gaploid/cosmic-collisions"
+}
+</script>
 </head>
 <body>
 <canvas id="stage"></canvas>
 <div id="hud-layer">
-<div class="hud" id="hud-title"><strong>Cosmic Collisions</strong><span id="hud-sub">initializing…</span></div>
+<div class="hud" id="hud-title"><h1>Cosmic Collisions</h1><span id="hud-sub">initializing…</span></div>
 <div class="hud" id="hud-corner"><a id="hud-back" href="https://gaploid.github.io/stardust/">stardust ↗</a><a id="hud-src" class="iconbtn" href="https://github.com/Gaploid/cosmic-collisions" target="_blank" rel="noopener" aria-label="source on GitHub" title="source on GitHub"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></a></div>
 <div class="hud" id="hud-controls">
 <div id="hud-scene">
@@ -50,7 +89,10 @@
   <button data-speed="16">4×</button>
 </div>
 <div id="hud-adv">
-  <button id="adv-toggle"><span class="ic">⚙️</span>advanced</button>
+  <div id="hud-toggles">
+    <button id="adv-toggle" aria-expanded="false" aria-controls="adv-panel"><span class="ic">⚙️</span>advanced</button>
+    <button id="about-toggle" aria-expanded="false" aria-controls="about-panel"><span class="ic">ℹ️</span>about</button>
+  </div>
   <div id="adv-panel" hidden>
     <label>impactor M⊕ <input type="range" id="set-q" min="0.02" max="1" step="0.01" value="0.1"><span id="val-q">0.10</span></label>
     <label>angle ° <input type="range" id="set-angle" min="0" max="85" step="1" value="45"><span id="val-angle">45</span></label>
@@ -70,6 +112,14 @@
     <label>lens <input type="checkbox" id="set-lens" checked><span id="val-lens">on</span></label>
     <label>drift <input type="checkbox" id="set-drift" checked><span id="val-drift">on</span></label>
   </div>
+  <!-- the page in words: what a reader without WebGL, or a crawler, gets of it -->
+  <section id="about-panel" hidden aria-labelledby="about-h">
+    <h2 id="about-h">The giant impact, simulated</h2>
+    <p>Two planets of real mass fall together under their own gravity and collide: a proto-Earth and an impactor from a fiftieth of an Earth to a whole one, iron core to mantle to crust, 16k to 262k particles. The splash, the tidal arm, the debris disk, and the moon that gathers out of it — computed live in WebGL 2, in the browser, nothing to install.</p>
+    <p>Five what-ifs. <b>Theia</b>, the canonical Moon-forming impact; <b>head-on</b>, flat and dead-on; <b>hit &amp; run</b>, grazing too fast to be caught; <b>twins</b>, an impactor grown to Earth's own mass; <b>shatter</b>, fast enough to take both bodies apart. Mass, angle, inclination, speed, bounce, core and density are knobs under <b>advanced</b>, so the next what-if is a restart away.</p>
+    <p>The readout says what stays, what orbits, what escapes, and the Moon that disk would make, and keeps the books on momentum, angular momentum and energy. Gravity comes from the particles themselves on a 64³ mesh, contact is a spring-dashpot, and the heat of the impact stays in the rock and lights the picture. No SPH, no equation of state: real masses in a toy, not a paper.</p>
+    <p>Drag rotates · wheel zooms · space pauses · R restarts · F follows. <a href="https://github.com/Gaploid/cosmic-collisions">Source on GitHub</a>, MIT.</p>
+  </section>
 </div>
 </div>
 <div class="hud" id="hud-report" hidden></div>
@@ -386,8 +436,8 @@ function togglePause() {
 // starts — which is where the preset and run rows happen to have wrapped to —
 // and scrolls inside that. Off a phone there is always room and the cap comes
 // straight back off.
-function fitPanel() {
-  var p = $('adv-panel');
+function fitPanel() { fitOne($('adv-panel')); fitOne($('about-panel')); }
+function fitOne(p) {
   p.style.maxHeight = '';
   if (p.hidden) return;
   var top = p.getBoundingClientRect().top;
@@ -404,8 +454,19 @@ function fitPanel() {
   var room = floor - top - 10;
   if (room < p.scrollHeight) p.style.maxHeight = Math.max(120, room) + 'px';
 }
+// two panels in one column: opening either closes the other
+function showPanel(id, open) {
+  var p = $(id), b = $(id === 'adv-panel' ? 'adv-toggle' : 'about-toggle');
+  p.hidden = !open; b.classList.toggle('on', open); b.setAttribute('aria-expanded', open);
+}
 $('adv-toggle').addEventListener('click', function () {
-  var p = $('adv-panel'); p.hidden = !p.hidden; $('adv-toggle').classList.toggle('on', !p.hidden);
+  var open = $('adv-panel').hidden;
+  showPanel('adv-panel', open); if (open) showPanel('about-panel', false);
+  fitPanel();
+});
+$('about-toggle').addEventListener('click', function () {
+  var open = $('about-panel').hidden;
+  showPanel('about-panel', open); if (open) showPanel('adv-panel', false);
   fitPanel();
 });
 window.addEventListener('resize', fitPanel);

@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://gaploid.github.io/cosmic-collisions/sitemap.xml

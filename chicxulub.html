@@ -4,12 +4,21 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#04060a">
-<meta name="description" content="The Chicxulub impact, simulated: a 14 km asteroid opens a 90 km bowl in the Yucatán platform in eighty seconds, and the ejecta curtain goes up.">
-<meta property="og:title" content="Chicxulub — Cosmic Collisions">
-<meta property="og:description" content="The impact that ended the Cretaceous, dug in your browser.">
+<title>Chicxulub asteroid impact simulator — Cosmic Collisions</title>
+<meta name="description" content="The Chicxulub impact, simulated in WebGL: a 14 km asteroid hits the Yucatán at 20 km/s, opens a 90 km bowl in eighty seconds, and its plume goes round the world — the impact that ended the Cretaceous and the dinosaurs.">
+<link rel="canonical" href="https://gaploid.github.io/cosmic-collisions/chicxulub.html">
+<meta property="og:site_name" content="Cosmic Collisions">
+<meta property="og:title" content="Chicxulub — the asteroid that ended the Cretaceous, simulated">
+<meta property="og:description" content="A 14 km asteroid hits the Yucatán at 20 km/s, in your browser: the crater, the plume, the first day.">
 <meta property="og:type" content="website">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>&#x2604;</text></svg>">
-<title>Chicxulub — Cosmic Collisions</title>
+<meta property="og:url" content="https://gaploid.github.io/cosmic-collisions/chicxulub.html">
+<meta property="og:image" content="https://gaploid.github.io/cosmic-collisions/og-chicxulub.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The Chicxulub ejecta plume bursting over the globe, thirteen minutes after the impact">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="icon-chicxulub.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="icon-chicxulub.png">
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-M1GPXGSXSN"></script>
 <script>
@@ -20,13 +29,43 @@
   gtag('config', 'G-M1GPXGSXSN');
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="src/hud.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Chicxulub — Cosmic Collisions",
+  "alternateName": "Chicxulub asteroid impact simulator",
+  "url": "https://gaploid.github.io/cosmic-collisions/chicxulub.html",
+  "description": "The Chicxulub impact, simulated in WebGL: a 14 km asteroid hits the Yucatán at 20 km/s, opens a 90 km bowl in eighty seconds, and its plume goes round the world — the impact that ended the Cretaceous and the dinosaurs.",
+  "applicationCategory": "EducationalApplication",
+  "operatingSystem": "Any",
+  "browserRequirements": "Requires WebGL 2",
+  "isAccessibleForFree": true,
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "image": "https://gaploid.github.io/cosmic-collisions/og-chicxulub.jpg",
+  "screenshot": "https://gaploid.github.io/cosmic-collisions/og-chicxulub.jpg",
+  "keywords": "Chicxulub, asteroid impact, Cretaceous extinction, dinosaurs, impact crater simulation, WebGL",
+  "author": {
+    "@type": "Person",
+    "name": "Gaploid",
+    "url": "https://github.com/Gaploid"
+  },
+  "license": "https://github.com/Gaploid/cosmic-collisions/blob/main/LICENSE",
+  "sameAs": "https://github.com/Gaploid/cosmic-collisions"
+}
+</script>
 </head>
 <body>
 <canvas id="stage"></canvas>
 <div id="hud-layer">
-<div class="hud" id="hud-title"><strong>Chicxulub</strong><span id="hud-sub">initializing…</span></div>
+<div class="hud" id="hud-title"><h1>Chicxulub</h1><span id="hud-sub">initializing…</span></div>
 <div class="hud" id="hud-corner"><a id="hud-back" href="https://gaploid.github.io/stardust/">stardust ↗</a><a id="hud-src" class="iconbtn" href="https://github.com/Gaploid/cosmic-collisions" target="_blank" rel="noopener" aria-label="source on GitHub" title="source on GitHub"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></a></div>
 <div class="hud" id="hud-controls">
 <div id="hud-scene">
@@ -51,7 +90,10 @@
   <button data-speed="16">4×</button>
 </div>
 <div id="hud-adv">
-  <button id="adv-toggle"><span class="ic">⚙️</span>advanced</button>
+  <div id="hud-toggles">
+    <button id="adv-toggle" aria-expanded="false" aria-controls="adv-panel"><span class="ic">⚙️</span>advanced</button>
+    <button id="about-toggle" aria-expanded="false" aria-controls="about-panel"><span class="ic">ℹ️</span>about</button>
+  </div>
   <div id="adv-panel" hidden>
     <label>impactor km <input type="range" id="set-imp" min="1" max="30" step="0.5" value="14"><span id="val-imp">14</span></label>
     <label>speed km/s <input type="range" id="set-vimp" min="11" max="72" step="1" value="20"><span id="val-vimp">20</span></label>
@@ -70,6 +112,14 @@
     <label>lens <input type="checkbox" id="set-lens" checked><span id="val-lens">on</span></label>
     <label>drift <input type="checkbox" id="set-drift" checked><span id="val-drift">on</span></label>
   </div>
+  <!-- the page in words: what a reader without WebGL, or a crawler, gets of it -->
+  <section id="about-panel" hidden aria-labelledby="about-h">
+    <h2 id="about-h">The Chicxulub impact, simulated</h2>
+    <p>Sixty-six million years ago a carbonaceous asteroid some fourteen kilometres across came down on the Yucatán platform at twenty kilometres a second, sixty degrees from the north-east, and the Cretaceous ended. This page digs it live in WebGL 2, in the browser, nothing to install: carbonate over crystalline basement, the ejecta curtain going up, and a ninety-kilometre transient bowl opening in about eighty seconds.</p>
+    <p>Two scales. <b>The crater</b>: presets from a one-kilometre rock to a thirty-kilometre one, with a readout of impact energy, ejecta, melt and seismic magnitude. <b>The first day</b>: the crater is a dot on the globe, but the plume outruns the atmosphere, arcs over half a world and is down everywhere within two hours — that, not the crater, is what ended the Cretaceous. Impactor size, speed and angle are knobs under <b>advanced</b>.</p>
+    <p>A contact model, not a shock code: no equation of state, no vaporization, no strength, and the first second is a scaling law (Collins 2005 and 2020, Housen &amp; Holsapple 2011, Melosh 1989). The <a href="index.html">giant impact</a> that made the Moon is the other page; <a href="https://github.com/Gaploid/cosmic-collisions">source on GitHub</a>, MIT.</p>
+    <p>Drag rotates · wheel zooms · space pauses · R restarts.</p>
+  </section>
 </div>
 </div>
 <div class="hud" id="hud-report" hidden></div>
@@ -1519,8 +1569,8 @@ function togglePause() {
   b.setAttribute('aria-label', run.paused ? 'resume' : 'pause');
   b.setAttribute('title', (run.paused ? 'resume' : 'pause') + ' — space');
 }
-function fitPanel() {
-  var p = $('adv-panel');
+function fitPanel() { fitOne($('adv-panel')); fitOne($('about-panel')); }
+function fitOne(p) {
   p.style.maxHeight = '';
   if (p.hidden) return;
   var top = p.getBoundingClientRect().top;
@@ -1534,8 +1584,19 @@ function fitPanel() {
   var room = floor - top - 10;
   if (room < p.scrollHeight) p.style.maxHeight = Math.max(120, room) + 'px';
 }
+// two panels in one column: opening either closes the other
+function showPanel(id, open) {
+  var p = $(id), b = $(id === 'adv-panel' ? 'adv-toggle' : 'about-toggle');
+  p.hidden = !open; b.classList.toggle('on', open); b.setAttribute('aria-expanded', open);
+}
 $('adv-toggle').addEventListener('click', function () {
-  var p = $('adv-panel'); p.hidden = !p.hidden; $('adv-toggle').classList.toggle('on', !p.hidden);
+  var open = $('adv-panel').hidden;
+  showPanel('adv-panel', open); if (open) showPanel('about-panel', false);
+  fitPanel();
+});
+$('about-toggle').addEventListener('click', function () {
+  var open = $('about-panel').hidden;
+  showPanel('about-panel', open); if (open) showPanel('adv-panel', false);
   fitPanel();
 });
 window.addEventListener('resize', fitPanel);
